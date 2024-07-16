@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"time"
 
@@ -37,6 +38,7 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 	}
 
 	id = resp.ID
+
 	log.Println(name, "container created", id)
 
 	err = docker_cli.ContainerStart(context.Background(), id, container.StartOptions{})
@@ -82,7 +84,7 @@ func GetContainerIP(id string) string {
 	return info.NetworkSettings.IPAddress
 }
 
-func ExecContainer(id string, cmd string, timeout int) error {
+func ExecContainer(id string, cmd string, timeout int) (int, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
@@ -92,7 +94,7 @@ func ExecContainer(id string, cmd string, timeout int) error {
 
 	if err != nil {
 		log.Println("container exec create error", err)
-		return err
+		return -1, "", err
 	}
 
 	log.Println("container exec created", resp.ID)
@@ -100,12 +102,43 @@ func ExecContainer(id string, cmd string, timeout int) error {
 	err = docker_cli.ContainerExecStart(ctx, resp.ID, container.ExecStartOptions{
 		Detach: false,
 	})
+
+	outresp, err := docker_cli.ContainerExecAttach(ctx, resp.ID, container.ExecStartOptions{})
 	if err != nil {
-		log.Println("container exec start error", err)
-		return err
+		log.Println("container exec attach error", err)
+		return -1, "", err
 	}
+	defer outresp.Close()
 
 	log.Println("container exec started", resp.ID)
 
-	return nil
+	outs, err := io.ReadAll(outresp.Reader)
+
+	inspectResp, err := docker_cli.ContainerExecInspect(ctx, resp.ID)
+	if err != nil {
+		log.Println("container exec inspect error", err)
+		return -1, "", err
+	}
+
+	return inspectResp.ExitCode, string(outs), err
+}
+
+func GetContainerLogs(id string) (string, error) {
+	resp, err := docker_cli.ContainerLogs(context.Background(), id, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+	})
+	if err != nil {
+		log.Println("container logs error", err)
+		return "", err
+	}
+
+	res, err := io.ReadAll(resp)
+
+	if err != nil {
+		log.Println("container logs read error", err)
+		return "", err
+	}
+
+	return string(res), nil
 }

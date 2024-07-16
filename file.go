@@ -59,7 +59,6 @@ func SftpHandler(sess ssh.Session) {
 	}()
 	go func() {
 		io.Copy(sess, conn)
-		sess.CloseWrite()
 		wg.Done()
 	}()
 

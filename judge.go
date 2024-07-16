@@ -1,237 +1,242 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"os"
 	"path"
-	"path/filepath"
+	"strconv"
 	"time"
 
+	"github.com/logrusorgru/aurora/v4"
+	"github.com/rs/zerolog/log"
+
 	"github.com/docker/docker/api/types/mount"
-	"github.com/google/uuid"
 )
 
 type JudgeResult struct {
 	Success bool
-	Score   int
+
+	Score int
 
 	Msg string
 
 	Memory uint64 // in bytes
 	Time   uint64 // in ns
+
+	Speedup float64
 }
 
-type Workflow struct {
-	Image string
-	Steps []string
-
-	Timeout int // in ns
+type WorkflowResult struct {
+	Success  bool
+	Logs     string
+	ExitCode int
 }
 
-type Submit struct {
-	Path    string
-	MaxSize int
-	IsDir   bool
-	Requred bool
+type userface struct {
+	*bytes.Buffer
+	io.Writer
 }
 
-type Problem struct {
-	Text string
-
-	Submits []Submit
-
-	Workflow []Workflow
+func (f *userface) Print(a ...interface{}) (n int, err error) {
+	return fmt.Fprint(io.MultiWriter(f.Buffer, f.Writer), a...)
 }
 
-func SubmitJudge(user string, problem Problem) JudgeResult {
+type SubmitCtx struct {
+	ID      string `gorm:"primaryKey"`
+	User    string
+	Problem string
 
-	var _uid, err = uuid.NewV7()
+	problem *Problem
+
+	SubmitTime int64
+	LastUpdate int64
+
+	Status string
+	Msg    string
+
+	SubmitDir       string
+	SubmitsHashes   map[string]string
+	Workdir         string
+	WorkflowResults []WorkflowResult
+	JudgeResult     JudgeResult
+
+	running  chan struct{}
+	userface userface
+}
+
+func (ctx *SubmitCtx) Update() *SubmitCtx {
+	ctx.LastUpdate = time.Now().UnixNano()
+	return ctx
+}
+
+func (ctx *SubmitCtx) SetStatus(status string) *SubmitCtx {
+	ctx.Status = status
+	return ctx
+}
+
+func (ctx *SubmitCtx) SetMsg(msg string) *SubmitCtx {
+	ctx.Msg = msg
+	return ctx
+}
+
+func RunJudge(ctx *SubmitCtx) {
+	log.Debug().Timestamp().Str("id", ctx.ID).Str("user", ctx.User).Str("problem", ctx.Problem).Msg("run judge")
+
+	var err error
+
+	defer func() {
+		log.Debug().Timestamp().Str("id", ctx.ID).Str("status", ctx.Status).Str("judgemsg", ctx.Msg).AnErr("err", err).Msg("judge finished")
+		close(ctx.running)
+	}()
+
+	ctx.userface.Print("Submission", aurora.Magenta(ctx.ID), aurora.Green("running"))
+
+	ctx.SetStatus("prep_dirs").Update()
+
+	var submits_dir = path.Join(ctx.Workdir, "submits")
+	var workflow_dir = path.Join(ctx.Workdir, "work")
+
+	err = os.Mkdir(ctx.Workdir, 0700)
 	if err != nil {
-		return JudgeResult{
-			Success: false,
-			Msg:     "failed to generate uuid",
-		}
+		goto workdir_creation_failed
+	}
+	err = os.Mkdir(submits_dir, 0700)
+	if err != nil {
+		goto workdir_creation_failed
+	}
+	err = os.Mkdir(workflow_dir, 0700)
+	if err != nil {
+		goto workdir_creation_failed
 	}
 
-	var _uid_str = _uid.String()
+	goto workdir_created
 
-	// create working dir
-	var submit_workdir = cfg.SubmitWorkDir + "/" + time.Now().Format("20060102150405") + "-" + user
+workdir_creation_failed:
 
-	log.Println(user, "submit workdir", submit_workdir)
+	ctx.SetStatus("failed").SetMsg("failed to create submit workdir").Update()
+	return
 
-	if err := os.MkdirAll(submit_workdir, 0700); err != nil {
-		return JudgeResult{
-			Success: false,
-			Msg:     "failed to create working dir",
-		}
-	}
+workdir_created:
 
-	var submit_dir = submit_workdir + "/submits"
+	log.Debug().Timestamp().Str("id", ctx.ID).Str("submit_workdir", ctx.Workdir).Msg("created working dirs")
 
-	if err := os.MkdirAll(submit_dir, 0700); err != nil {
-		return JudgeResult{
-			Success: false,
-			Msg:     "failed to create submit dir",
-		}
-	}
+	ctx.SetStatus("prep_files").Update()
 
-	//copy submits
-	for _, submit := range problem.Submits {
+	for _, submit := range ctx.problem.Submits {
 
-		var src_submit_path = path.Join(cfg.SubmitsDir, user, submit.Path)
-		var dst_submit_path = path.Join(submit_dir, submit.Path)
+		var src_submit_path = path.Join(ctx.SubmitDir, submit.Path)
+		var dst_submit_path = path.Join(submits_dir, submit.Path)
 
-		if submit.IsDir {
-			if err := CopyDir(src_submit_path, dst_submit_path); err != nil {
-				log.Println("failed to copy submit dir", src_submit_path, dst_submit_path, err)
-				return JudgeResult{
-					Success: false,
-					Msg:     "failed to copy submit dir",
-				}
-			}
+		var hash string
+		hash, err = CopyFile(src_submit_path, dst_submit_path)
+		if err != nil {
+			ctx.SetStatus("failed").SetMsg("failed to copy submit file " + strconv.Quote(submit.Path)).Update()
 		} else {
-			if err := CopyFile(src_submit_path, dst_submit_path); err != nil {
-				log.Println("failed to copy submit file", src_submit_path, dst_submit_path, err)
-				return JudgeResult{
-					Success: false,
-					Msg:     "failed to copy submit file",
-				}
-			}
+			log.Debug().Timestamp().Str("id", ctx.ID).Str("submit_file", submit.Path).Str("hash", hash).Msg("copied submit file")
+			ctx.SubmitsHashes[submit.Path] = hash
 		}
 
-		log.Println("copy submit", src_submit_path, dst_submit_path)
 	}
 
-	var work_dir = submit_workdir + "/work"
+	log.Debug().Timestamp().Str("id", ctx.ID).Msg("copied submit files")
 
-	if err := os.MkdirAll(work_dir, 0700); err != nil {
-		return JudgeResult{
-			Success: false,
-			Msg:     "failed to create work dir",
-		}
-	}
+	ctx.SetStatus("run_workflow").Update()
 
 	var mount = []mount.Mount{
 		{
 			Type:   mount.TypeBind,
-			Source: submit_dir,
+			Source: submits_dir,
 			Target: "/submits",
 		},
 		{
 			Type:   mount.TypeBind,
-			Source: work_dir,
+			Source: workflow_dir,
 			Target: "/work",
 		},
 	}
 
-	for _, workflow := range problem.Workflow {
-		ok, cid := RunImage("soj-judge-"+_uid_str, "1000", "soj-judge"+_uid_str, workflow.Image, "/work", mount, false, false)
+	for idx, workflow := range ctx.problem.Workflow {
+
+		ctx.SetStatus("run_workflow-" + strconv.Itoa(idx)).Update()
+
+		ok, cid := RunImage("soj-judge-"+ctx.ID, "1000", "soj-judgement", workflow.Image, "/work", mount, false, false)
 
 		if !ok {
-			return JudgeResult{
-				Success: false,
-				Msg:     "failed to run judge container",
-			}
+			ctx.SetStatus("failed").SetMsg("failed to run judge container").Update()
+			return
 		}
 
 		defer CleanContainer(cid)
 
-		for _, step := range workflow.Steps {
-			err := ExecContainer(cid, step, workflow.Timeout)
+		for sidx, step := range workflow.Steps {
+			ctx.SetStatus("run_workflow-" + strconv.Itoa(idx) + "_" + strconv.Itoa(sidx)).Update()
 
-			if err != nil {
-				return JudgeResult{
-					Success: false,
-					Msg:     "failed to exec judge container",
-				}
+			ec, logs, err := ExecContainer(cid, step, workflow.Timeout)
+
+			if ec != 0 || err != nil {
+				ctx.SetStatus("failed").SetMsg("failed to run judge step").Update()
+
+				log.Info().Timestamp().Str("id", ctx.ID).Str("image", workflow.Image).Str("step", step).Int("timeout", workflow.Timeout).AnErr("err", err).Str("logs", logs).Int("exitcode", ec).Msg("failed to run judge step")
+				return
 			}
-		}
 
+			ctx.WorkflowResults = append(ctx.WorkflowResults, WorkflowResult{
+				Success:  true,
+				Logs:     logs,
+				ExitCode: ec,
+			})
+		}
 	}
 
-	var result_file = work_dir + "/result.json"
+	ctx.SetStatus("collect_result").Update()
+
+	var result_file = workflow_dir + "/result.json"
 
 	_result, err := os.ReadFile(result_file)
 
 	if err != nil {
-		return JudgeResult{
-			Success: false,
-			Msg:     "failed to read result file",
-		}
+		log.Info().Timestamp().Str("id", ctx.ID).Str("result_file", result_file).AnErr("err", err).Msg("failed to read result file")
+		ctx.SetStatus("failed").SetMsg("failed to read result file").Update()
 	}
 
-	var result = JudgeResult{}
-
-	err = json.Unmarshal(_result, &result)
+	err = json.Unmarshal(_result, &ctx.JudgeResult)
 	if err != nil {
-		return JudgeResult{
-			Success: false,
-			Msg:     "failed to parse result file",
-		}
+		log.Info().Timestamp().Str("id", ctx.ID).Str("result_file", result_file).AnErr("err", err).Msg("failed to parse result file")
+		ctx.SetStatus("failed").SetMsg("failed to parse result file").Update()
 	}
 
-	return result
+	ctx.SetStatus("completed").SetMsg("judge successfully finished").Update()
 }
 
-// CopyFile copies a single file from src to dst.
-func CopyFile(src, dst string) error {
+// CopyFile copies a single file from src to dst and returns the MD5 hash of the copied file.
+func CopyFile(src, dst string) (string, error) {
 	sourceFile, err := os.Open(src)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer sourceFile.Close()
 
 	destinationFile, err := os.Create(dst)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer destinationFile.Close()
 
-	_, err = io.Copy(destinationFile, sourceFile)
-	if err != nil {
-		return err
+	hash := md5.New()
+	if _, err = io.Copy(destinationFile, io.TeeReader(sourceFile, hash)); err != nil {
+		return "", err
 	}
 
-	return destinationFile.Sync()
-}
-
-// CopyDir copies a whole directory recursively from src to dst.
-func CopyDir(src string, dst string) error {
-	src = filepath.Clean(src)
-	dst = filepath.Clean(dst)
-
-	sInfo, err := os.Stat(src)
-	if err != nil {
-		return err
+	if err := destinationFile.Sync(); err != nil {
+		return "", err
 	}
 
-	if err := os.MkdirAll(dst, sInfo.Mode()); err != nil {
-		return err
-	}
-
-	entries, err := ioutil.ReadDir(src)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-
-		if entry.IsDir() {
-			if err := CopyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-		} else {
-			if err := CopyFile(srcPath, dstPath); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Calculate the MD5 sum of the file that has been copied.
+	md5String := hex.EncodeToString(hash.Sum(nil))
+	return md5String, nil
 }
