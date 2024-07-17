@@ -50,19 +50,12 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 
 	log.Println(name, "container started", id)
 
-waiting:
-	info, err := docker_cli.ContainerInspect(context.Background(), id)
-	if err != nil {
-		panic(err)
-	}
+	// // info, err := docker_cli.ContainerInspect(context.Background(), id)
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	if !info.State.Running {
-		time.Sleep(50 * time.Millisecond)
-		log.Println(name, "container is not running,waiting", info.State.Status)
-		goto waiting
-	}
-
-	log.Println(name, "container is running", id)
+	// log.Println(name, "container is running", id)
 
 	return true, id
 }

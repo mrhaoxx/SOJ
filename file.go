@@ -4,7 +4,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/netip"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/mount"
@@ -34,13 +36,13 @@ func SftpHandler(sess ssh.Session) {
 		log.Println(name, "failed to run sftp container")
 		return
 	}
-	defer CleanContainer(id)
+	// defer CleanContainer(id)
 
-	time.Sleep(200 * time.Millisecond)
+	// time.Sleep(500 * time.Millisecond)
 
 	ip := GetContainerIP(id)
 
-	conn, err := net.Dial("tcp", ip+":2207")
+	conn, err := net.DialTCP("tcp", nil, net.TCPAddrFromAddrPort(netip.MustParseAddrPort(ip+":2207")))
 	if err != nil {
 		log.Println(name, "failed to connect to container", id, err)
 		return
@@ -48,13 +50,23 @@ func SftpHandler(sess ssh.Session) {
 
 	log.Println(name, "connected to container", id)
 
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
 	go func() {
 		io.Copy(conn, sess)
-		conn.Close()
+		conn.CloseWrite()
+		// log.Println(name, "session up closed", id)
+		wg.Done()
 	}()
 
-	io.Copy(sess, conn)
-	sess.CloseWrite()
+	go func() {
+		io.Copy(sess, conn)
+		sess.CloseWrite()
+		wg.Done()
+	}()
+
+	wg.Wait()
 
 	log.Println(name, "session closed", id)
 }

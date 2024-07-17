@@ -1,31 +1,38 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/netip"
+	"os"
 
 	"github.com/mrhaoxx/sftp"
 )
 
 func main() {
 
-	lc, err := net.Listen("tcp", "0.0.0.0:2207")
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("recovered from panic", r)
+		}
+	}()
+
+	lc, err := net.ListenTCP("tcp", net.TCPAddrFromAddrPort(netip.MustParseAddrPort("0.0.0.0:2207")))
 	if err != nil {
 		log.Fatalf("failed to listen on 0.0.0.0:2207")
 	}
 
 	log.Println("sftp server listening")
 
-	conn, err := lc.Accept()
+	conn, err := lc.AcceptTCP()
 	if err != nil {
 		log.Fatalf("failed to accept connection")
 	}
 
-	debugStream := io.Discard
+	// debugStream := io.Discard
 	serverOptions := []sftp.ServerOption{
-		sftp.WithDebug(debugStream),
+		sftp.WithDebug(os.Stdout),
 		sftp.WithServerWorkingDirectory("/work"),
 	}
 	server, err := sftp.NewServer(
@@ -40,8 +47,10 @@ func main() {
 
 	if err := server.Serve(); err == io.EOF {
 		server.Close()
-		fmt.Println("sftp client exited session.")
+		log.Println("sftp client exited session.")
 	} else if err != nil {
-		fmt.Println("sftp server completed with error:", err)
+		log.Println("sftp server completed with error:", err)
 	}
+
+	log.Println("sftp server exited")
 }
