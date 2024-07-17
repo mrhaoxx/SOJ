@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/mount"
@@ -49,20 +48,13 @@ func SftpHandler(sess ssh.Session) {
 
 	log.Println(name, "connected to container", id)
 
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-
 	go func() {
 		io.Copy(conn, sess)
 		conn.Close()
-		wg.Done()
-	}()
-	go func() {
-		io.Copy(sess, conn)
-		wg.Done()
 	}()
 
-	wg.Wait()
+	io.Copy(sess, conn)
+	sess.CloseWrite()
 
 	log.Println(name, "session closed", id)
 }

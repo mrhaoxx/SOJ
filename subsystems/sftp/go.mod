@@ -2,7 +2,7 @@ module github.com/mrhaoxx/SOJ/subsystems/sftp
 
 go 1.22.5
 
-require github.com/mrhaoxx/sftp v0.0.3
+require github.com/mrhaoxx/sftp v0.0.4
 
 require (
 	github.com/kr/fs v0.1.0 // indirect
