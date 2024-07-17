@@ -229,7 +229,7 @@ workdir_created:
 		ctx.SetStatus("run_workflow-" + strconv.Itoa(idx)).Update()
 		ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "/", len(ctx.problem.Workflow))
 
-		ok, cid := RunImage("soj-judge-"+ctx.ID, "1000", "soj-judgement", workflow.Image, "/work", mount, false, false)
+		ok, cid := RunImage("soj-judge-"+ctx.ID+"-"+strconv.Itoa(idx+1), "1000", "soj-judgement", workflow.Image, "/work", mount, false, false)
 
 		if !ok {
 			ctx.SetStatus("failed").SetMsg("failed to run judge container").Update()

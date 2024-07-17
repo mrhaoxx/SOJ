@@ -8,3 +8,4 @@ config.yaml
 SOJ
 
 *.log
+soj.db

@@ -129,15 +129,6 @@ func main() {
 
 					<-ctx.running
 
-					s.Write([]byte("submission:\n"))
-					s.Write([]byte(ctx.Status + "\n"))
-					s.Write([]byte(ctx.Msg + "\n"))
-
-					s.Write([]byte("results:\n"))
-					s.Write([]byte("success: " + strconv.FormatBool(ctx.JudgeResult.Success) + "\n"))
-					s.Write([]byte("score: " + strconv.Itoa(ctx.JudgeResult.Score) + "\n"))
-					s.Write([]byte("msg: " + ctx.JudgeResult.Msg + "\n"))
-
 				case "history":
 					if len(cmds) != 1 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
