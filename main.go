@@ -103,15 +103,16 @@ func main() {
 					}
 
 					uf.Println(aurora.Green("Submitting"), aurora.Bold(pid))
+					subtime := time.Now()
 
-					id := time.Now().Format("20060102150405") + strconv.Itoa(os.Getpid())
+					id := strconv.Itoa(int(subtime.UnixNano()))
 					ctx := SubmitCtx{
 						ID:      id,
 						Problem: pid,
 						problem: &pb,
 						User:    s.User(),
 
-						SubmitTime: time.Now().UnixNano(),
+						SubmitTime: subtime.UnixNano(),
 
 						Status: "init",
 
@@ -129,6 +130,8 @@ func main() {
 
 					<-ctx.running
 
+					WriteResult(uf, ctx.JudgeResult)
+
 				case "history":
 					if len(cmds) != 1 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
@@ -143,10 +146,10 @@ func main() {
 					for _, submit := range submits {
 						uf.Println(submit.ID, submit.Problem, submit.Status, submit.Msg, submit.JudgeResult.Score)
 					}
-				case "logs":
+				case "status":
 					if len(cmds) != 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
-						uf.Println("usage: logs <submit_id>")
+						uf.Println("usage: status <submit_id>")
 						return
 					}
 
@@ -157,7 +160,13 @@ func main() {
 						return
 					}
 
-					uf.Println("Logs for", aurora.Bold(submit.ID))
+					if submit.Status == "completed" {
+						WriteResult(uf, submit.JudgeResult)
+					} else {
+						uf.Println("Submit", aurora.Bold(submit.ID), "is", ColorizeStatus(submit.Status))
+					}
+
+					uf.Println("\nLogs for", aurora.Bold(submit.ID))
 
 					s.Write(submit.Userface.Buffer.Bytes())
 
@@ -178,4 +187,14 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to listen")
 	}
+}
+
+func WriteResult(uf Userface, res JudgeResult) {
+	if res.Success {
+		uf.Println(aurora.Green("Accepted"), aurora.Bold(res.Score))
+	} else {
+		uf.Println(aurora.Red("Wrong Answer"), aurora.Bold(res.Score))
+	}
+
+	uf.Println("Message:\n", aurora.Cyan(res.Msg))
 }
