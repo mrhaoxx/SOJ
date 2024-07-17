@@ -89,7 +89,9 @@ func ExecContainer(id string, cmd string, timeout int) (int, string, error) {
 	defer cancel()
 
 	resp, err := docker_cli.ContainerExecCreate(ctx, id, container.ExecOptions{
-		Cmd: []string{"sh", "-c", cmd},
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          []string{"sh", "-c", cmd},
 	})
 
 	if err != nil {
@@ -98,10 +100,6 @@ func ExecContainer(id string, cmd string, timeout int) (int, string, error) {
 	}
 
 	log.Println("container exec created", resp.ID)
-
-	err = docker_cli.ContainerExecStart(ctx, resp.ID, container.ExecStartOptions{
-		Detach: false,
-	})
 
 	outresp, err := docker_cli.ContainerExecAttach(ctx, resp.ID, container.ExecStartOptions{})
 	if err != nil {

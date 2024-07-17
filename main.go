@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/logrusorgru/aurora/v4"
 	"github.com/rs/zerolog/log"
 
 	"github.com/docker/docker/client"
@@ -62,35 +63,46 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to open sqlite")
 	}
 
-	db.AutoMigrate(&SubmitRecord{})
+	db.AutoMigrate(&SubmitCtx{})
 
 	problems := LoadProblemDir(cfg.ProblemsDir)
 
 	s := &ssh.Server{
 		Addr: cfg.ListenAddr,
 		Handler: func(s ssh.Session) {
-			log.Info().Str("user", s.User()).Msg("new session")
+			uf := Userface{
+				Buffer: bytes.NewBuffer(nil),
+				Writer: s,
+			}
+
 			cmds := s.Command()
-			log.Info().Str("user", s.User()).Strs("cmds", cmds).Msg("command")
+			log.Info().Str("user", s.User()).Strs("cmds", cmds).Msg("new session")
+
+			uf.Println("Welcome to", aurora.Bold("SOJ"), aurora.Gray(aurora.GrayIndex(10), "Secure Online Judge"))
+			uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 
 			if len(cmds) == 0 {
-				s.Write([]byte(s.User() + ", Welcome to Secure Online Judge\n"))
+
+				uf.Println("Type 'submit <problem_id>' to submit a problem")
+
 			} else {
 				switch cmds[0] {
 				case "submit":
 					if len(cmds) != 2 {
-						s.Write([]byte("usage: submit <problem_id>\n"))
+						uf.Println(aurora.Red("error:"), "invalid arguments")
+						uf.Println("usage: submit <problem_id>")
 						return
 					}
+
 					pid := cmds[1]
 
 					pb, ok := problems[pid]
 					if !ok {
-						s.Write([]byte("problem " + strconv.Quote(pid) + " not found\n"))
+						uf.Println(aurora.Red("error:"), "problem", aurora.Yellow(strconv.Quote(pid)), "not found")
 						return
 					}
 
-					s.Write([]byte("submitting " + strconv.Quote(pid) + "\n"))
+					uf.Println(aurora.Green("Submitting"), aurora.Bold(pid))
 
 					id := time.Now().Format("20060102150405") + strconv.Itoa(os.Getpid())
 					ctx := SubmitCtx{
@@ -103,14 +115,12 @@ func main() {
 
 						Status: "init",
 
-						SubmitsHashes: make(map[string]string),
-
 						SubmitDir: path.Join(cfg.SubmitsDir, s.User(), pid),
 						Workdir:   path.Join(cfg.SubmitWorkDir, id),
 
-						userface: userface{
+						Userface: Userface{
 							Buffer: bytes.NewBuffer(nil),
-							Writer: s,
+							Writer: uf,
 						},
 						running: make(chan struct{}),
 					}
@@ -127,6 +137,39 @@ func main() {
 					s.Write([]byte("success: " + strconv.FormatBool(ctx.JudgeResult.Success) + "\n"))
 					s.Write([]byte("score: " + strconv.Itoa(ctx.JudgeResult.Score) + "\n"))
 					s.Write([]byte("msg: " + ctx.JudgeResult.Msg + "\n"))
+
+				case "history":
+					if len(cmds) != 1 {
+						uf.Println(aurora.Red("error:"), "invalid arguments")
+						uf.Println("usage: history")
+						return
+					}
+
+					var submits []SubmitCtx
+					db.Where("user = ?", s.User()).Find(&submits)
+
+					uf.Println("Your submissions:")
+					for _, submit := range submits {
+						uf.Println(submit.ID, submit.Problem, submit.Status, submit.Msg, submit.JudgeResult.Score)
+					}
+				case "logs":
+					if len(cmds) != 2 {
+						uf.Println(aurora.Red("error:"), "invalid arguments")
+						uf.Println("usage: logs <submit_id>")
+						return
+					}
+
+					var submit SubmitCtx
+					tx := db.Where("id = ?", cmds[1]).First(&submit)
+					if tx.Error != nil {
+						uf.Println(aurora.Red("error:"), "submit", aurora.Yellow(strconv.Quote(cmds[1])), "not found")
+						return
+					}
+
+					uf.Println("Logs for", aurora.Bold(submit.ID))
+
+					s.Write(submit.Userface.Buffer.Bytes())
+
 				default:
 					s.Write([]byte("unknown command " + strconv.Quote(s.RawCommand()) + "\n"))
 				}

@@ -35,17 +35,38 @@ type WorkflowResult struct {
 	Success  bool
 	Logs     string
 	ExitCode int
+
+	Steps []WorkflowStepResult
 }
 
-type userface struct {
+type WorkflowStepResult struct {
+	Logs     string
+	ExitCode int
+}
+
+type Userface struct {
 	*bytes.Buffer
 	io.Writer
 }
 
-func (f *userface) Print(a ...interface{}) (n int, err error) {
-	return fmt.Fprint(io.MultiWriter(f.Buffer, f.Writer), a...)
+func (f Userface) Println(a ...interface{}) (n int, err error) {
+	return fmt.Fprintln(f, a...)
 }
 
+func (f Userface) Write(p []byte) (n int, err error) {
+	var _f io.Writer
+	if f.Writer != nil {
+		_f = io.MultiWriter(f.Buffer, f.Writer)
+	} else {
+		_f = f.Buffer
+	}
+	return _f.Write(p)
+}
+
+type SubmitHash struct {
+	Path string
+	Hash string
+}
 type SubmitCtx struct {
 	ID      string `gorm:"primaryKey"`
 	User    string
@@ -60,18 +81,18 @@ type SubmitCtx struct {
 	Msg    string
 
 	SubmitDir       string
-	SubmitsHashes   map[string]string
+	SubmitsHashes   SubmitsHashes
 	Workdir         string
-	WorkflowResults []WorkflowResult
+	WorkflowResults WorkflowResults
 	JudgeResult     JudgeResult
 
 	running  chan struct{}
-	userface userface
+	Userface Userface
 }
 
-func (ctx *SubmitCtx) Update() *SubmitCtx {
+func (ctx *SubmitCtx) Update() {
 	ctx.LastUpdate = time.Now().UnixNano()
-	return ctx
+	db.Save(ctx)
 }
 
 func (ctx *SubmitCtx) SetStatus(status string) *SubmitCtx {
@@ -84,17 +105,47 @@ func (ctx *SubmitCtx) SetMsg(msg string) *SubmitCtx {
 	return ctx
 }
 
+func GetTime(time.Time) aurora.Value {
+	return aurora.Gray(15, time.Now().Format("2006-01-02 15:04:05.000"))
+}
+
+func ColorizeStatus(status string) aurora.Value {
+	switch status {
+	case "init":
+		return aurora.Gray(10, status)
+	case "prep_dirs":
+		return aurora.Yellow(status)
+	case "prep_files":
+		return aurora.Yellow(status)
+	case "run_workflow":
+		return aurora.Yellow(status)
+	case "collect_result":
+		return aurora.Yellow(status)
+	case "completed":
+		return aurora.Green(status)
+	case "failed":
+		return aurora.Red(status)
+	default:
+		return aurora.Bold(status)
+	}
+}
+
 func RunJudge(ctx *SubmitCtx) {
 	log.Debug().Timestamp().Str("id", ctx.ID).Str("user", ctx.User).Str("problem", ctx.Problem).Msg("run judge")
+
+	var start_time = time.Now()
 
 	var err error
 
 	defer func() {
 		log.Debug().Timestamp().Str("id", ctx.ID).Str("status", ctx.Status).Str("judgemsg", ctx.Msg).AnErr("err", err).Msg("judge finished")
+		ctx.Userface.Println(GetTime(start_time), "Submission", ColorizeStatus(ctx.Status))
 		close(ctx.running)
+
+		ctx.Update()
 	}()
 
-	ctx.userface.Print("Submission", aurora.Magenta(ctx.ID), aurora.Green("running"))
+	ctx.Userface.Println("Submission ID:", aurora.Magenta(ctx.ID))
 
 	ctx.SetStatus("prep_dirs").Update()
 
@@ -125,6 +176,8 @@ workdir_created:
 
 	log.Debug().Timestamp().Str("id", ctx.ID).Str("submit_workdir", ctx.Workdir).Msg("created working dirs")
 
+	ctx.Userface.Println(GetTime(start_time), "Submitting files")
+
 	ctx.SetStatus("prep_files").Update()
 
 	for _, submit := range ctx.problem.Submits {
@@ -136,14 +189,25 @@ workdir_created:
 		hash, err = CopyFile(src_submit_path, dst_submit_path)
 		if err != nil {
 			ctx.SetStatus("failed").SetMsg("failed to copy submit file " + strconv.Quote(submit.Path)).Update()
+			ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Red("failed"))
+			return
 		} else {
 			log.Debug().Timestamp().Str("id", ctx.ID).Str("submit_file", submit.Path).Str("hash", hash).Msg("copied submit file")
-			ctx.SubmitsHashes[submit.Path] = hash
+			// ctx.SubmitsHashes[submit.Path] = hash
+
+			ctx.SubmitsHashes = append(ctx.SubmitsHashes, SubmitHash{
+				Hash: hash,
+				Path: submit.Path,
+			})
+
+			ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Blue(hash))
 		}
 
 	}
 
 	log.Debug().Timestamp().Str("id", ctx.ID).Msg("copied submit files")
+
+	ctx.Userface.Println(GetTime(start_time), "Running Judge workflows")
 
 	ctx.SetStatus("run_workflow").Update()
 
@@ -163,6 +227,7 @@ workdir_created:
 	for idx, workflow := range ctx.problem.Workflow {
 
 		ctx.SetStatus("run_workflow-" + strconv.Itoa(idx)).Update()
+		ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "/", len(ctx.problem.Workflow))
 
 		ok, cid := RunImage("soj-judge-"+ctx.ID, "1000", "soj-judgement", workflow.Image, "/work", mount, false, false)
 
@@ -173,8 +238,12 @@ workdir_created:
 
 		defer CleanContainer(cid)
 
+		steps := make([]WorkflowStepResult, len(workflow.Steps))
+
 		for sidx, step := range workflow.Steps {
 			ctx.SetStatus("run_workflow-" + strconv.Itoa(idx) + "_" + strconv.Itoa(sidx)).Update()
+
+			ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "step", strconv.Itoa(sidx+1), "/", len(workflow.Steps))
 
 			ec, logs, err := ExecContainer(cid, step, workflow.Timeout)
 
@@ -185,12 +254,27 @@ workdir_created:
 				return
 			}
 
-			ctx.WorkflowResults = append(ctx.WorkflowResults, WorkflowResult{
-				Success:  true,
+			steps[sidx] = WorkflowStepResult{
 				Logs:     logs,
 				ExitCode: ec,
-			})
+			}
+			log.Debug().Timestamp().Str("id", ctx.ID).Str("image", workflow.Image).Str("step", step).Int("timeout", workflow.Timeout).Str("logs", logs).Int("exitcode", ec).Msg("ran judge step")
 		}
+
+		logs, err := GetContainerLogs(cid)
+		if err != nil {
+			ctx.SetStatus("failed").SetMsg("failed to get judge logs").Update()
+			return
+		}
+
+		ctx.WorkflowResults = append(ctx.WorkflowResults, WorkflowResult{
+			Success: true,
+			Logs:    logs,
+			Steps:   steps,
+		})
+
+		log.Debug().Timestamp().Str("id", ctx.ID).Str("image", workflow.Image).Str("logs", logs).Msg("got judge logs")
+
 	}
 
 	ctx.SetStatus("collect_result").Update()
@@ -202,12 +286,14 @@ workdir_created:
 	if err != nil {
 		log.Info().Timestamp().Str("id", ctx.ID).Str("result_file", result_file).AnErr("err", err).Msg("failed to read result file")
 		ctx.SetStatus("failed").SetMsg("failed to read result file").Update()
+		return
 	}
 
 	err = json.Unmarshal(_result, &ctx.JudgeResult)
 	if err != nil {
 		log.Info().Timestamp().Str("id", ctx.ID).Str("result_file", result_file).AnErr("err", err).Msg("failed to parse result file")
 		ctx.SetStatus("failed").SetMsg("failed to parse result file").Update()
+		return
 	}
 
 	ctx.SetStatus("completed").SetMsg("judge successfully finished").Update()
