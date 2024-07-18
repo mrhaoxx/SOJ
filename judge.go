@@ -274,13 +274,15 @@ workdir_created:
 
 			ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "step", strconv.Itoa(sidx+1), "/", len(workflow.Steps))
 
+			_, ok := stepshows[sidx+1]
+			if ok {
+				ctx.Userface.Println("	$", aurora.Yellow(step))
+			}
 			ec, logs, err := ExecContainer(cid, step, workflow.Timeout)
 
-			if _, ok := stepshows[sidx+1]; ok {
+			if ok {
 				// ctx.Userface.Println("	", aurora.Blue(logs))
-				ctx.Userface.Println("	$", aurora.Yellow(step))
 				//split stdout and stderr from docker
-
 				stdcopy.StdCopy(ColoredIO{ctx.Userface, aurora.BlueFg}, ColoredIO{ctx.Userface, aurora.RedFg}, bytes.NewReader([]byte(logs)))
 
 				ctx.Userface.Println(aurora.Gray(15, "\nexit code:"), aurora.Yellow(ec))

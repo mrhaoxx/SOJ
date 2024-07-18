@@ -81,14 +81,17 @@ func main() {
 			cmds := s.Command()
 			log.Info().Str("user", s.User()).Strs("cmds", cmds).Msg("new session")
 
-			uf.Println("Welcome to", aurora.Bold("SOJ"), aurora.Gray(aurora.GrayIndex(10), "Secure Online Judge"))
-			uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
-
 			if len(cmds) == 0 {
-
+				uf.Println("Welcome to", aurora.Bold("SOJ"), aurora.Gray(aurora.GrayIndex(10), "Secure Online Judge"))
+				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 				uf.Println("Type 'submit <problem_id>' to submit a problem")
+				uf.Println("Type 'history [page]' to list your submissions")
+				uf.Println("Type 'status <submit_id>' to show a submission")
+				uf.Println()
 
 			} else {
+				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
+
 				switch cmds[0] {
 				case "submit":
 					if len(cmds) != 2 {
@@ -174,8 +177,6 @@ func main() {
 					if len(submits) == 0 {
 						uf.Println(aurora.Gray(15, "No submissions yet"))
 					} else {
-						uf.Println("Your submissions:")
-
 						// t.AddHeader("ID", "Problem", "Status", "Message", "Score", "Judge Message")
 						Cols := []string{"ID", "Problem", "Status", "Message", "Score", "Judge Message", "Date"}
 						var ColLongest = make([]int, len(Cols))
@@ -201,11 +202,11 @@ func main() {
 							// uf.Println(aurora.Magenta(submit.ID), submit.Problem, ColorizeStatus(submit.Status), aurora.Blue(submit.Msg), aurora.Bold(submit.JudgeResult.Score))
 							uf.Printf("%-*s %-*s %-*s %-*s %-*.2f %-*s %-*s\n",
 								ColLongest[0], aurora.Magenta(submit.ID),
-								ColLongest[1], aurora.Italic(submit.Problem),
+								ColLongest[1], aurora.Bold(aurora.Italic(submit.Problem)),
 								ColLongest[2], ColorizeStatus(submit.Status),
 								ColLongest[3], aurora.Blue(submit.Msg),
 								ColLongest[4], aurora.Bold(ColorizeScore(submit.JudgeResult)),
-								ColLongest[5], aurora.Blue(submit.JudgeResult.Msg),
+								ColLongest[5], aurora.Bold(aurora.Blue(submit.JudgeResult.Msg)),
 								ColLongest[6], aurora.Yellow(time.Unix(0, submit.SubmitTime).Format(time.DateTime+" MST")))
 						}
 					}
@@ -271,7 +272,7 @@ func WriteResult(uf Userface, res JudgeResult) {
 	uf.Println("Judgement Message:")
 
 	if len(res.Msg) > 0 {
-		uf.Println("	", aurora.Cyan(res.Msg))
+		uf.Println("	", aurora.Bold(aurora.Cyan(res.Msg)))
 	} else {
 		uf.Println("	", aurora.Gray(15, "No message"))
 	}

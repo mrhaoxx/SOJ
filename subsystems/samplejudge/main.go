@@ -54,7 +54,7 @@ func main() {
 		os.WriteFile("/work/result.json", byes, 0644)
 	} else {
 		byes, _ := json.Marshal(JudgeResult{
-			Success: false,
+			Success: true,
 			Score:   23.3,
 			Msg:     "Incorrect",
 		})
