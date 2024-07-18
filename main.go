@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -127,12 +126,16 @@ func main() {
 							Buffer: bytes.NewBuffer(nil),
 							Writer: uf,
 						},
+						// JudgeResult: JudgeResult{Score: -1},
 						running: make(chan struct{}),
 					}
 
 					go RunJudge(&ctx)
 
 					<-ctx.running
+
+					uf.Println("Submit", "is", ColorizeStatus(ctx.Status))
+					uf.Println("Message:\n	", aurora.Blue(ctx.Msg))
 
 					WriteResult(uf, ctx.JudgeResult)
 
@@ -185,7 +188,7 @@ func main() {
 							ColLongest[1] = max(ColLongest[1], len(submit.Problem))
 							ColLongest[2] = max(ColLongest[2], len(submit.Status))
 							ColLongest[3] = max(ColLongest[3], len(submit.Msg))
-							ColLongest[4] = max(ColLongest[4], len(strconv.Itoa(submit.JudgeResult.Score)))
+							ColLongest[4] = max(ColLongest[4], len(fmt.Sprintf("%.2f", submit.JudgeResult.Score)))
 							ColLongest[5] = max(ColLongest[5], len(submit.JudgeResult.Msg))
 							ColLongest[6] = max(ColLongest[6], len(time.Unix(0, submit.SubmitTime).Format(time.DateTime)))
 						}
@@ -196,12 +199,12 @@ func main() {
 						uf.Println()
 						for _, submit := range submits {
 							// uf.Println(aurora.Magenta(submit.ID), submit.Problem, ColorizeStatus(submit.Status), aurora.Blue(submit.Msg), aurora.Bold(submit.JudgeResult.Score))
-							uf.Printf("%-*s %-*s %-*s %-*s %-*d %-*s %-*s\n",
+							uf.Printf("%-*s %-*s %-*s %-*s %-*.2f %-*s %-*s\n",
 								ColLongest[0], aurora.Magenta(submit.ID),
 								ColLongest[1], aurora.Italic(submit.Problem),
 								ColLongest[2], ColorizeStatus(submit.Status),
 								ColLongest[3], aurora.Blue(submit.Msg),
-								ColLongest[4], aurora.Bold(submit.JudgeResult.Score),
+								ColLongest[4], aurora.Bold(ColorizeScore(submit.JudgeResult)),
 								ColLongest[5], aurora.Blue(submit.JudgeResult.Msg),
 								ColLongest[6], aurora.Yellow(time.Unix(0, submit.SubmitTime).Format(time.DateTime+" MST")))
 						}
@@ -214,6 +217,8 @@ func main() {
 						return
 					}
 
+					uf.Println(aurora.Green("Showing"), aurora.Bold("submission"), aurora.Magenta(cmds[1]))
+
 					var submit SubmitCtx
 					tx := db.Where("id = ? AND user = ?", cmds[1], s.User()).First(&submit)
 					if tx.Error != nil {
@@ -221,18 +226,21 @@ func main() {
 						return
 					}
 
-					if submit.Status == "completed" {
-						WriteResult(uf, submit.JudgeResult)
-					} else {
-						uf.Println("Submit", aurora.Bold(submit.ID), "is", ColorizeStatus(submit.Status))
-					}
+					uf.Println()
 
-					uf.Println("\nLogs for", aurora.Bold(submit.ID))
+					// if submit.Status == "completed" {
+					WriteResult(uf, submit.JudgeResult)
+					// }
+
+					uf.Println("Submit", "is", ColorizeStatus(submit.Status))
+					uf.Println("Message:\n	", aurora.Blue(submit.Msg))
+
+					uf.Println("\nLogs:")
 
 					s.Write(submit.Userface.Buffer.Bytes())
 
-					c, _ := json.Marshal(submit)
-					fmt.Println(string(c))
+					// c, _ := json.Marshal(submit)
+					// fmt.Println(string(c))
 
 				default:
 					s.Write([]byte("unknown command " + strconv.Quote(s.RawCommand()) + "\n"))
@@ -255,10 +263,17 @@ func main() {
 
 func WriteResult(uf Userface, res JudgeResult) {
 	if res.Success {
-		uf.Println(aurora.Green("Accepted"), aurora.Bold(res.Score))
+		uf.Printf("%.2f\n", aurora.Bold(ColorizeScore(res)))
 	} else {
-		uf.Println(aurora.Red("Wrong Answer"), aurora.Bold(res.Score))
+		uf.Println(aurora.Red("Judgement is Failed"))
 	}
 
-	uf.Println("Message:\n", aurora.Cyan(res.Msg))
+	uf.Println("Judgement Message:")
+
+	if len(res.Msg) > 0 {
+		uf.Println("	", aurora.Cyan(res.Msg))
+	} else {
+		uf.Println("	", aurora.Gray(15, "No message"))
+	}
+	uf.Println()
 }

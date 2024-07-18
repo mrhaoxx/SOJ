@@ -21,7 +21,7 @@ import (
 type JudgeResult struct {
 	Success bool
 
-	Score int
+	Score float64
 
 	Msg string
 
@@ -110,6 +110,19 @@ func (ctx *SubmitCtx) SetMsg(msg string) *SubmitCtx {
 
 func GetTime(time.Time) aurora.Value {
 	return aurora.Gray(15, time.Now().Format("2006-01-02 15:04:05.000"))
+}
+
+func ColorizeScore(res JudgeResult) aurora.Value {
+	if !res.Success {
+		return aurora.Gray(15, res.Score)
+	}
+	if res.Score >= 95 {
+		return aurora.Green(res.Score)
+	} else if res.Score >= 60 {
+		return aurora.Yellow(res.Score)
+	} else {
+		return aurora.Red(res.Score)
+	}
 }
 
 func ColorizeStatus(status string) aurora.Value {
@@ -258,7 +271,7 @@ workdir_created:
 			ec, logs, err := ExecContainer(cid, step, workflow.Timeout)
 
 			if ec != 0 || err != nil {
-				ctx.SetStatus("failed").SetMsg("failed to run judge step").Update()
+				ctx.SetStatus("failed").SetMsg("failed to run judge " + strconv.Itoa(idx+1) + " step " + strconv.Itoa(sidx+1)).Update()
 
 				log.Info().Timestamp().Str("id", ctx.ID).Str("image", workflow.Image).Str("step", step).Int("timeout", workflow.Timeout).AnErr("err", err).Str("logs", logs).Int("exitcode", ec).Msg("failed to run judge step")
 				return
