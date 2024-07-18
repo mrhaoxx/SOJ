@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 
 	"github.com/rs/zerolog/log"
 )
@@ -77,7 +79,7 @@ func GetContainerIP(id string) string {
 	return info.NetworkSettings.IPAddress
 }
 
-func ExecContainer(id string, cmd string, timeout int) (int, string, error) {
+func ExecContainer(id string, cmd string, timeout int, stdout, stderr io.Writer) (int, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
@@ -103,7 +105,18 @@ func ExecContainer(id string, cmd string, timeout int) (int, string, error) {
 
 	log.Debug().Str("id", id).Str("exec_id", resp.ID).Msg("container exec started")
 
-	outs, err := io.ReadAll(outresp.Reader)
+	buf := bytes.NewBuffer(nil)
+	if stdout != nil && stderr != nil {
+		_, err := stdcopy.StdCopy(stdout, stderr, io.TeeReader(outresp.Reader, buf))
+		if err != nil {
+			log.Err(err).Str("id", id).Str("exec_id", resp.ID).Msg("container exec copy error")
+		}
+	} else {
+		_, err = io.Copy(buf, outresp.Reader)
+		if err != nil {
+			log.Err(err).Str("id", id).Str("exec_id", resp.ID).Msg("container exec copy error")
+		}
+	}
 
 	inspectResp, err := docker_cli.ContainerExecInspect(ctx, resp.ID)
 	if err != nil {
@@ -111,7 +124,7 @@ func ExecContainer(id string, cmd string, timeout int) (int, string, error) {
 		return -1, "", err
 	}
 
-	return inspectResp.ExitCode, string(outs), err
+	return inspectResp.ExitCode, buf.String(), err
 }
 
 func GetContainerLogs(id string) (string, error) {

@@ -140,7 +140,7 @@ func main() {
 					uf.Println("Submit", "is", ColorizeStatus(ctx.Status))
 					uf.Println("Message:\n	", aurora.Blue(ctx.Msg))
 
-					WriteResult(uf, ctx.JudgeResult)
+					WriteResult(uf, ctx)
 
 				case "history":
 					if len(cmds) > 2 {
@@ -230,11 +230,16 @@ func main() {
 					uf.Println()
 
 					// if submit.Status == "completed" {
-					WriteResult(uf, submit.JudgeResult)
+					WriteResult(uf, submit)
 					// }
 
 					uf.Println("Submit", "is", ColorizeStatus(submit.Status))
-					uf.Println("Message:\n	", aurora.Blue(submit.Msg))
+
+					if len(submit.Msg) > 0 {
+						uf.Println("Message:\n	", aurora.Blue(submit.Msg))
+					} else {
+						uf.Println("Message:\n	", aurora.Gray(15, "No message"))
+					}
 
 					uf.Println("\nLogs:")
 
@@ -262,17 +267,22 @@ func main() {
 	}
 }
 
-func WriteResult(uf Userface, res JudgeResult) {
-	if res.Success {
-		uf.Printf("%.2f\n", aurora.Bold(ColorizeScore(res)))
+func WriteResult(uf Userface, res SubmitCtx) {
+	if res.Status != "completed" {
+		uf.Println(aurora.Italic(aurora.Underline(aurora.Bold(aurora.Gray(15, "No judgement result")))))
+		uf.Println()
+		return
+	}
+	if res.JudgeResult.Success {
+		uf.Printf("%.2f\n", aurora.Bold(ColorizeScore(res.JudgeResult)))
 	} else {
 		uf.Println(aurora.Red("Judgement is Failed"))
 	}
 
 	uf.Println("Judgement Message:")
 
-	if len(res.Msg) > 0 {
-		uf.Println("	", aurora.Bold(aurora.Cyan(res.Msg)))
+	if len(res.JudgeResult.Msg) > 0 {
+		uf.Println("	", aurora.Bold(aurora.Cyan(res.JudgeResult.Msg)))
 	} else {
 		uf.Println("	", aurora.Gray(15, "No message"))
 	}

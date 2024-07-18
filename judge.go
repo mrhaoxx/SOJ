@@ -16,7 +16,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/pkg/stdcopy"
 )
 
 type JudgeResult struct {
@@ -63,7 +62,8 @@ func (f Userface) Write(p []byte) (n int, err error) {
 	} else {
 		_f = f.Buffer
 	}
-	return _f.Write(p)
+	_f.Write(p)
+	return len(p), nil
 }
 
 type SubmitHash struct {
@@ -231,9 +231,10 @@ workdir_created:
 
 	var mount = []mount.Mount{
 		{
-			Type:   mount.TypeBind,
-			Source: submits_dir,
-			Target: "/submits",
+			Type:     mount.TypeBind,
+			Source:   submits_dir,
+			Target:   "/submits",
+			ReadOnly: true,
 		},
 		{
 			Type:   mount.TypeBind,
@@ -275,18 +276,20 @@ workdir_created:
 			ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "step", strconv.Itoa(sidx+1), "/", len(workflow.Steps))
 
 			_, ok := stepshows[sidx+1]
+			var rr io.Writer = nil
+			var re io.Writer = nil
 			if ok {
 				ctx.Userface.Println("	$", aurora.Yellow(step))
+				rr = ColoredIO{ctx.Userface, aurora.BlueFg}
+				re = ColoredIO{ctx.Userface, aurora.RedFg}
+
 			}
-			ec, logs, err := ExecContainer(cid, step, workflow.Timeout)
+			ec, logs, err := ExecContainer(cid, step, workflow.Timeout, rr, re)
 
 			if ok {
-				// ctx.Userface.Println("	", aurora.Blue(logs))
-				//split stdout and stderr from docker
-				stdcopy.StdCopy(ColoredIO{ctx.Userface, aurora.BlueFg}, ColoredIO{ctx.Userface, aurora.RedFg}, bytes.NewReader([]byte(logs)))
-
-				ctx.Userface.Println(aurora.Gray(15, "\nexit code:"), aurora.Yellow(ec))
+				ctx.Userface.Println(aurora.Gray(15, "exit code:"), aurora.Yellow(ec))
 			}
+
 			if ec != 0 || err != nil {
 				ctx.SetStatus("failed").SetMsg("failed to run judge " + strconv.Itoa(idx+1) + " step " + strconv.Itoa(sidx+1)).Update()
 
@@ -298,6 +301,8 @@ workdir_created:
 				Logs:     logs,
 				ExitCode: ec,
 			}
+
+			ctx.Update()
 			log.Debug().Timestamp().Str("id", ctx.ID).Str("image", workflow.Image).Str("step", step).Int("timeout", workflow.Timeout).Str("logs", logs).Int("exitcode", ec).Msg("ran judge step")
 		}
 
@@ -373,5 +378,6 @@ type ColoredIO struct {
 }
 
 func (c ColoredIO) Write(p []byte) (n int, err error) {
-	return c.Writer.Write([]byte(aurora.Colorize(string(p), c.Color).String()))
+	_, err = c.Writer.Write([]byte(aurora.Colorize(string(p), c.Color).String()))
+	return len(p), err
 }
