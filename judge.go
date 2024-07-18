@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 type JudgeResult struct {
@@ -28,7 +29,6 @@ type JudgeResult struct {
 	Memory uint64 // in bytes
 	Time   uint64 // in ns
 
-	Speedup float64
 }
 
 type WorkflowResult struct {
@@ -247,6 +247,12 @@ workdir_created:
 		ctx.SetStatus("run_workflow-" + strconv.Itoa(idx)).Update()
 		ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "/", len(ctx.problem.Workflow))
 
+		stepshows := map[int]struct{}{}
+
+		for _, step := range workflow.Show {
+			stepshows[step] = struct{}{}
+		}
+
 		var usr = "1000"
 		if workflow.Root {
 			usr = "0"
@@ -270,6 +276,15 @@ workdir_created:
 
 			ec, logs, err := ExecContainer(cid, step, workflow.Timeout)
 
+			if _, ok := stepshows[sidx+1]; ok {
+				// ctx.Userface.Println("	", aurora.Blue(logs))
+				ctx.Userface.Println("	$", aurora.Yellow(step))
+				//split stdout and stderr from docker
+
+				stdcopy.StdCopy(ColoredIO{ctx.Userface, aurora.BlueFg}, ColoredIO{ctx.Userface, aurora.RedFg}, bytes.NewReader([]byte(logs)))
+
+				ctx.Userface.Println(aurora.Gray(15, "\nexit code:"), aurora.Yellow(ec))
+			}
 			if ec != 0 || err != nil {
 				ctx.SetStatus("failed").SetMsg("failed to run judge " + strconv.Itoa(idx+1) + " step " + strconv.Itoa(sidx+1)).Update()
 
@@ -348,4 +363,13 @@ func CopyFile(src, dst string) (string, error) {
 	// Calculate the MD5 sum of the file that has been copied.
 	md5String := hex.EncodeToString(hash.Sum(nil))
 	return md5String, nil
+}
+
+type ColoredIO struct {
+	io.Writer
+	aurora.Color
+}
+
+func (c ColoredIO) Write(p []byte) (n int, err error) {
+	return c.Writer.Write([]byte(aurora.Colorize(string(p), c.Color).String()))
 }

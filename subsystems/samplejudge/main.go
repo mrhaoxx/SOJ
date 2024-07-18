@@ -11,7 +11,7 @@ import (
 type JudgeResult struct {
 	Success bool
 
-	Score int
+	Score float64
 
 	Msg string
 
@@ -55,7 +55,7 @@ func main() {
 	} else {
 		byes, _ := json.Marshal(JudgeResult{
 			Success: false,
-			Score:   0,
+			Score:   23.3,
 			Msg:     "Incorrect",
 		})
 		os.WriteFile("/work/result.json", byes, 0644)
