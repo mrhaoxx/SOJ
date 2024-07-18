@@ -3,17 +3,19 @@ package main
 import (
 	"context"
 	"io"
-	"log"
+
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+
+	"github.com/rs/zerolog/log"
 )
 
 var docker_cli *client.Client
 
-func RunImage(name string, user string, hostname string, image string, workdir string, mounts []mount.Mount, mask bool, ReadonlyRootfs bool) (ok bool, id string) {
+func RunImage(name string, user string, hostname string, image string, workdir string, mounts []mount.Mount, mask bool, ReadonlyRootfs bool, networkdisabled bool, timeout int) (ok bool, id string) {
 
 	var masked []string
 	if mask {
@@ -21,10 +23,12 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 	}
 
 	resp, err := docker_cli.ContainerCreate(context.Background(), &container.Config{
-		Image:      image,
-		User:       user,
-		Hostname:   hostname,
-		WorkingDir: workdir,
+		Image:           image,
+		User:            user,
+		Hostname:        hostname,
+		WorkingDir:      workdir,
+		NetworkDisabled: networkdisabled,
+		StopTimeout:     &timeout,
 	}, &container.HostConfig{
 		MaskedPaths:    masked,
 		Mounts:         mounts,
@@ -33,29 +37,23 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 	}, nil, nil, name)
 
 	if err != nil {
-		log.Println(name, "container create error", err)
+		// log.Println(name, "container create error", err)
+		log.Err(err).Str("name", name).Str("image", image).Msg("container create error")
 		return false, ""
 	}
 
 	id = resp.ID
 
-	log.Println(name, "container created", id)
+	log.Debug().Str("name", name).Str("image", image).Str("id", id).Msg("container created")
 
 	err = docker_cli.ContainerStart(context.Background(), id, container.StartOptions{})
 
 	if err != nil {
-		log.Println("container start error", err)
+		log.Err(err).Str("name", name).Str("image", image).Str("id", id).Msg("container start error")
 		return false, ""
 	}
 
-	log.Println(name, "container started", id)
-
-	// // info, err := docker_cli.ContainerInspect(context.Background(), id)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// log.Println(name, "container is running", id)
+	log.Debug().Str("name", name).Str("image", image).Str("id", id).Msg("container started")
 
 	return true, id
 }
@@ -63,15 +61,17 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 func CleanContainer(id string) {
 	err := docker_cli.ContainerRemove(context.Background(), id, container.RemoveOptions{Force: true})
 	if err != nil {
-		log.Println("container remove error", err)
+		log.Err(err).Str("id", id).Msg("container remove error")
+		return
 	}
-	log.Println("container removed", id)
+	log.Debug().Str("id", id).Msg("container removed")
 }
 
 func GetContainerIP(id string) string {
 	info, err := docker_cli.ContainerInspect(context.Background(), id)
 	if err != nil {
-		panic(err)
+		log.Err(err).Str("id", id).Msg("failed to get ip: container inspect error")
+		return ""
 	}
 
 	return info.NetworkSettings.IPAddress
@@ -88,26 +88,26 @@ func ExecContainer(id string, cmd string, timeout int) (int, string, error) {
 	})
 
 	if err != nil {
-		log.Println("container exec create error", err)
+		log.Err(err).Str("id", id).Msg("container exec create error")
 		return -1, "", err
 	}
 
-	log.Println("container exec created", resp.ID)
+	log.Debug().Str("id", id).Str("exec_id", resp.ID).Msg("container exec created")
 
 	outresp, err := docker_cli.ContainerExecAttach(ctx, resp.ID, container.ExecStartOptions{})
 	if err != nil {
-		log.Println("container exec attach error", err)
+		log.Err(err).Str("id", id).Str("exec_id", resp.ID).Msg("container exec attach error")
 		return -1, "", err
 	}
 	defer outresp.Close()
 
-	log.Println("container exec started", resp.ID)
+	log.Debug().Str("id", id).Str("exec_id", resp.ID).Msg("container exec started")
 
 	outs, err := io.ReadAll(outresp.Reader)
 
 	inspectResp, err := docker_cli.ContainerExecInspect(ctx, resp.ID)
 	if err != nil {
-		log.Println("container exec inspect error", err)
+		log.Err(err).Str("id", id).Str("exec_id", resp.ID).Msg("container exec inspect error")
 		return -1, "", err
 	}
 
@@ -120,14 +120,14 @@ func GetContainerLogs(id string) (string, error) {
 		ShowStderr: true,
 	})
 	if err != nil {
-		log.Println("container logs error", err)
+		log.Err(err).Str("id", id).Msg("container logs error")
 		return "", err
 	}
 
 	res, err := io.ReadAll(resp)
 
 	if err != nil {
-		log.Println("container logs read error", err)
+		log.Err(err).Str("id", id).Msg("container logs read error")
 		return "", err
 	}
 

@@ -52,6 +52,9 @@ type Userface struct {
 func (f Userface) Println(a ...interface{}) (n int, err error) {
 	return fmt.Fprintln(f, a...)
 }
+func (f Userface) Printf(format string, a ...interface{}) (n int, err error) {
+	return fmt.Fprintf(f, format, a...)
+}
 
 func (f Userface) Write(p []byte) (n int, err error) {
 	var _f io.Writer
@@ -125,6 +128,8 @@ func ColorizeStatus(status string) aurora.Value {
 		return aurora.Green(status)
 	case "failed":
 		return aurora.Red(status)
+	case "dead":
+		return aurora.Gray(15, status)
 	default:
 		return aurora.Bold(status)
 	}
@@ -229,7 +234,12 @@ workdir_created:
 		ctx.SetStatus("run_workflow-" + strconv.Itoa(idx)).Update()
 		ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "/", len(ctx.problem.Workflow))
 
-		ok, cid := RunImage("soj-judge-"+ctx.ID+"-"+strconv.Itoa(idx+1), "1000", "soj-judgement", workflow.Image, "/work", mount, false, false)
+		var usr = "1000"
+		if workflow.Root {
+			usr = "0"
+		}
+
+		ok, cid := RunImage("soj-judge-"+ctx.ID+"-"+strconv.Itoa(idx+1), usr, "soj-judgement", workflow.Image, "/work", mount, false, false, workflow.DisableNetwork, workflow.Timeout)
 
 		if !ok {
 			ctx.SetStatus("failed").SetMsg("failed to run judge container").Update()

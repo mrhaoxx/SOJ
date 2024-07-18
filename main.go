@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -64,6 +66,8 @@ func main() {
 	}
 
 	db.AutoMigrate(&SubmitCtx{})
+
+	db.Model(&SubmitCtx{}).Where("status != ? AND status != ? AND status != ?", "completed", "dead", "failed").Update("status", "dead")
 
 	problems := LoadProblemDir(cfg.ProblemsDir)
 
@@ -133,19 +137,76 @@ func main() {
 					WriteResult(uf, ctx.JudgeResult)
 
 				case "history":
-					if len(cmds) != 1 {
+					if len(cmds) > 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
-						uf.Println("usage: history")
+						uf.Println("usage: history [page]")
 						return
 					}
 
-					var submits []SubmitCtx
-					db.Where("user = ?", s.User()).Find(&submits)
+					uf.Println(aurora.Green("Listing"), aurora.Bold("submissions"))
 
-					uf.Println("Your submissions:")
-					for _, submit := range submits {
-						uf.Println(submit.ID, submit.Problem, submit.Status, submit.Msg, submit.JudgeResult.Score)
+					page := 1
+
+					if len(cmds) == 2 {
+						var err error
+						page, err = strconv.Atoi(cmds[1])
+						if err != nil {
+							uf.Println(aurora.Red("error:"), "invalid page number")
+							return
+						}
 					}
+
+					var submits []SubmitCtx
+					//paging
+					// reverse order
+
+					// db.Where("user = ?", s.User()).Offset((page - 1) * 10).Limit(10).Find(&submits)
+					db.Where("user = ?", s.User()).Order("submit_time desc").Offset((page - 1) * 10).Limit(10).Find(&submits)
+
+					var total int64
+					db.Model(&SubmitCtx{}).Where("user = ?", s.User()).Count(&total)
+
+					uf.Println(aurora.Cyan("Page"), aurora.Bold(page), "of", aurora.Yellow(total/10+1))
+
+					if len(submits) == 0 {
+						uf.Println(aurora.Gray(15, "No submissions yet"))
+					} else {
+						uf.Println("Your submissions:")
+
+						// t.AddHeader("ID", "Problem", "Status", "Message", "Score", "Judge Message")
+						Cols := []string{"ID", "Problem", "Status", "Message", "Score", "Judge Message", "Date"}
+						var ColLongest = make([]int, len(Cols))
+						for i, col := range Cols {
+							ColLongest[i] = len(col)
+						}
+
+						for _, submit := range submits {
+							ColLongest[0] = max(ColLongest[0], len(submit.ID))
+							ColLongest[1] = max(ColLongest[1], len(submit.Problem))
+							ColLongest[2] = max(ColLongest[2], len(submit.Status))
+							ColLongest[3] = max(ColLongest[3], len(submit.Msg))
+							ColLongest[4] = max(ColLongest[4], len(strconv.Itoa(submit.JudgeResult.Score)))
+							ColLongest[5] = max(ColLongest[5], len(submit.JudgeResult.Msg))
+							ColLongest[6] = max(ColLongest[6], len(time.Unix(0, submit.SubmitTime).Format(time.DateTime)))
+						}
+
+						for i, col := range Cols {
+							uf.Printf("%-*s ", ColLongest[i], col)
+						}
+						uf.Println()
+						for _, submit := range submits {
+							// uf.Println(aurora.Magenta(submit.ID), submit.Problem, ColorizeStatus(submit.Status), aurora.Blue(submit.Msg), aurora.Bold(submit.JudgeResult.Score))
+							uf.Printf("%-*s %-*s %-*s %-*s %-*d %-*s %-*s\n",
+								ColLongest[0], aurora.Magenta(submit.ID),
+								ColLongest[1], aurora.Italic(submit.Problem),
+								ColLongest[2], ColorizeStatus(submit.Status),
+								ColLongest[3], aurora.Blue(submit.Msg),
+								ColLongest[4], aurora.Bold(submit.JudgeResult.Score),
+								ColLongest[5], aurora.Blue(submit.JudgeResult.Msg),
+								ColLongest[6], aurora.Yellow(time.Unix(0, submit.SubmitTime).Format(time.DateTime+" MST")))
+						}
+					}
+
 				case "status":
 					if len(cmds) != 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
@@ -154,7 +215,7 @@ func main() {
 					}
 
 					var submit SubmitCtx
-					tx := db.Where("id = ?", cmds[1]).First(&submit)
+					tx := db.Where("id = ? AND user = ?", cmds[1], s.User()).First(&submit)
 					if tx.Error != nil {
 						uf.Println(aurora.Red("error:"), "submit", aurora.Yellow(strconv.Quote(cmds[1])), "not found")
 						return
@@ -169,6 +230,9 @@ func main() {
 					uf.Println("\nLogs for", aurora.Bold(submit.ID))
 
 					s.Write(submit.Userface.Buffer.Bytes())
+
+					c, _ := json.Marshal(submit)
+					fmt.Println(string(c))
 
 				default:
 					s.Write([]byte("unknown command " + strconv.Quote(s.RawCommand()) + "\n"))

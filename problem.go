@@ -11,7 +11,9 @@ type Workflow struct {
 	Image string   `yaml:"image"`
 	Steps []string `yaml:"steps"`
 
-	Timeout int `yaml:"timeout"`
+	Timeout        int  `yaml:"timeout"`
+	Root           bool `yaml:"root"`
+	DisableNetwork bool `yaml:"disablenetwork"`
 }
 
 type Submit struct {
