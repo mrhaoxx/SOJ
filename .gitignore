@@ -9,3 +9,5 @@ SOJ
 
 *.log
 soj.db
+
+subsystems/slurm
