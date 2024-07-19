@@ -1,10 +1,10 @@
-FROM golang:alpine AS build
+FROM docker.io/library/golang:alpine AS build
 
 COPY . /go/src/github.com/mrhaoxx/SOJ/subsystems/samplejudge
 
 RUN cd /go/src/github.com/mrhaoxx/SOJ/subsystems/samplejudge && go build -o /samplejudge main.go
 
-FROM debian AS runtime
+FROM docker.io/library/debian AS runtime
 
 COPY --from=build /samplejudge /samplejudge
 

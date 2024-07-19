@@ -61,7 +61,9 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 }
 
 func CleanContainer(id string) {
-	err := docker_cli.ContainerRemove(context.Background(), id, container.RemoveOptions{Force: true})
+	var timeout = 1
+	err := docker_cli.ContainerStop(context.Background(), id, container.StopOptions{Timeout: &timeout})
+	// err := docker_cli.ContainerRemove(context.Background(), id, container.RemoveOptions{Force: true, RemoveVolumes: true})
 	if err != nil {
 		log.Err(err).Str("id", id).Msg("container remove error")
 		return
