@@ -84,16 +84,16 @@ func main() {
 			if len(cmds) == 0 {
 				uf.Println("Welcome to", aurora.Bold("SOJ"), aurora.Gray(aurora.GrayIndex(10), "Secure Online Judge"))
 				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
-				uf.Println("Type 'submit <problem_id>' to submit a problem")
-				uf.Println("Type 'history [page]' to list your submissions")
-				uf.Println("Type 'status <submit_id>' to show a submission")
+				uf.Println("Use 'submit", aurora.Gray(15, "(sub)"), "<problem_id>' to submit a problem")
+				uf.Println("Use 'history", aurora.Gray(15, "(hi)"), "[page]' to list your submissions")
+				uf.Println("Use 'status", aurora.Gray(15, "(st)"), "<submit_id>' to show a submission")
 				uf.Println()
 
 			} else {
 				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 
 				switch cmds[0] {
-				case "submit":
+				case "submit", "sub":
 					if len(cmds) != 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
 						uf.Println("usage: submit <problem_id>")
@@ -142,7 +142,7 @@ func main() {
 
 					WriteResult(uf, ctx)
 
-				case "history":
+				case "history", "hi":
 					if len(cmds) > 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
 						uf.Println("usage: history [page]")
@@ -211,7 +211,7 @@ func main() {
 						}
 					}
 
-				case "status":
+				case "status", "st":
 					if len(cmds) != 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
 						uf.Println("usage: status <submit_id>")
@@ -247,6 +247,77 @@ func main() {
 
 					// c, _ := json.Marshal(submit)
 					// fmt.Println(string(c))
+				case "my":
+					uf.Println("User", aurora.Bold(aurora.BrightWhite(s.User())))
+
+					var map_score = make(map[string]SubmitCtx)
+
+					var submits []SubmitCtx
+
+					db.Where("user = ?", s.User()).Find(&submits)
+
+					for _, submit := range submits {
+						if submit.Status == "completed" {
+							sc, ok := map_score[submit.Problem]
+							if !ok {
+								map_score[submit.Problem] = submit
+							} else {
+								if submit.JudgeResult.Score > sc.JudgeResult.Score {
+									map_score[submit.Problem] = submit
+								}
+							}
+						}
+					}
+
+					for k := range problems {
+						if _, ok := map_score[k]; !ok {
+							map_score[k] = SubmitCtx{
+								Problem: k,
+							}
+						}
+					}
+
+					var total_score float64
+
+					Cols := []string{"Problem", "Score", "Weight", "Submit ID", "Date"}
+					var ColLongest = make([]int, len(Cols))
+					for i, col := range Cols {
+						ColLongest[i] = len(col)
+					}
+
+					for k, submit := range map_score {
+						ColLongest[0] = max(ColLongest[0], len(k))
+						ColLongest[1] = max(ColLongest[1], len(fmt.Sprintf("%.2f", submit.JudgeResult.Score)))
+						ColLongest[2] = max(ColLongest[2], len(fmt.Sprintf("%.2f", problems[k].Weight)))
+						ColLongest[3] = max(ColLongest[3], len(submit.ID))
+						ColLongest[4] = max(ColLongest[4], len(time.Unix(0, submit.SubmitTime).Format(time.DateTime+" MST")))
+
+						total_score += submit.JudgeResult.Score * problems[k].Weight
+					}
+
+					for i, col := range Cols {
+						uf.Printf("%-*s ", ColLongest[i], col)
+					}
+
+					uf.Println()
+					for _, submit := range map_score {
+						uf.Printf("%-*s %-*.2f %-*.2f %-*s %-*s\n",
+							ColLongest[0], aurora.Bold(aurora.Italic(submit.Problem)),
+							ColLongest[1], aurora.Bold(ColorizeScore(submit.JudgeResult)),
+							ColLongest[2], aurora.Bold(problems[submit.Problem].Weight),
+							ColLongest[3], aurora.Magenta(submit.ID),
+							ColLongest[4],
+							func() aurora.Value {
+								if submit.Status == "completed" {
+									return aurora.Yellow(time.Unix(0, submit.SubmitTime).Format(time.DateTime + " MST"))
+								} else {
+									return aurora.Gray(15, "N/A")
+								}
+							}())
+					}
+
+					uf.Println()
+					uf.Println("Total Score:", aurora.Bold(aurora.BrightWhite(total_score)))
 
 				default:
 					s.Write([]byte("unknown command " + strconv.Quote(s.RawCommand()) + "\n"))

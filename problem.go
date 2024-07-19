@@ -31,7 +31,7 @@ type Problem struct {
 
 	Text string `yaml:"text"`
 
-	MaxScore int `yaml:"maxscore"`
+	Weight float64 `yaml:"weight"`
 
 	Submits []Submit `yaml:"submits"`
 
@@ -53,6 +53,11 @@ func LoadProblem(file string) Problem {
 		panic(err)
 	}
 
+	if _p.Weight == 0 {
+		_p.Weight = 1.0
+	}
+
+	pblms = append(pblms, _p.Id)
 	return _p
 
 }
@@ -74,3 +79,5 @@ func LoadProblemDir(dir string) map[string]Problem {
 
 	return _p
 }
+
+var pblms []string
