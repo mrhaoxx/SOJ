@@ -312,7 +312,7 @@ workdir_created:
 			}
 
 			ctx.Update()
-			log.Debug().Timestamp().Str("id", ctx.ID).Str("image", workflow.Image).Str("step", step).Int("timeout", workflow.Timeout).Str("logs", logs).Int("exitcode", ec).Msg("ran judge step")
+			log.Debug().Timestamp().Any("mnt", _mount).Str("id", ctx.ID).Str("image", workflow.Image).Str("step", step).Int("timeout", workflow.Timeout).Str("logs", logs).Int("exitcode", ec).Msg("ran judge step")
 		}
 
 		logs, err := GetContainerLogs(cid)
