@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/docker/docker/api/types/mount"
 	"gopkg.in/yaml.v3"
 )
 
@@ -17,7 +16,14 @@ type Workflow struct {
 	DisableNetwork  bool  `yaml:"disablenetwork"`
 	Show            []int `yaml:"show"`
 	NetworkHostMode bool  `yaml:"networkhostmode"`
-	Mounts          []mount.Mount
+	Mounts          []Mount
+}
+
+type Mount struct {
+	Type     string `yaml:"type"`
+	Source   string `yaml:"source"`
+	Target   string `yaml:"target"`
+	ReadOnly bool   `yaml:"readonly"`
 }
 
 type Submit struct {

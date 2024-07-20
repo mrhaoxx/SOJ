@@ -231,7 +231,7 @@ workdir_created:
 
 	for idx, workflow := range ctx.problem.Workflow {
 
-		var mount = []mount.Mount{
+		var _mount = []mount.Mount{
 			{
 				Type:     mount.TypeBind,
 				Source:   submits_dir,
@@ -245,7 +245,14 @@ workdir_created:
 			},
 		}
 
-		mount = append(mount, workflow.Mounts...)
+		for _, mnt := range workflow.Mounts {
+			_mount = append(_mount, mount.Mount{
+				Type:     mount.Type(mnt.Type),
+				Source:   mnt.Source,
+				Target:   mnt.Target,
+				ReadOnly: mnt.ReadOnly,
+			})
+		}
 
 		ctx.SetStatus("run_workflow-" + strconv.Itoa(idx)).Update()
 		ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "/", len(ctx.problem.Workflow))
@@ -261,7 +268,7 @@ workdir_created:
 			usr = "0"
 		}
 
-		ok, cid := RunImage("soj-judge-"+ctx.ID+"-"+strconv.Itoa(idx+1), usr, "soj-judgement", workflow.Image, "/work", mount, false, false, workflow.DisableNetwork, workflow.Timeout, workflow.NetworkHostMode)
+		ok, cid := RunImage("soj-judge-"+ctx.ID+"-"+strconv.Itoa(idx+1), usr, "soj-judgement", workflow.Image, "/work", _mount, false, false, workflow.DisableNetwork, workflow.Timeout, workflow.NetworkHostMode)
 
 		if !ok {
 			ctx.SetStatus("failed").SetMsg("failed to run judge container").Update()
