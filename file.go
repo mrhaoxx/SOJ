@@ -30,7 +30,7 @@ func SftpHandler(sess ssh.Session) {
 			Source: path,
 			Target: "/work",
 		},
-	}, true, true, false, 120)
+	}, true, true, false, 120, false)
 
 	if !success {
 		log.Println(name, "failed to run sftp container")

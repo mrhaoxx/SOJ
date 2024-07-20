@@ -17,11 +17,16 @@ import (
 
 var docker_cli *client.Client
 
-func RunImage(name string, user string, hostname string, image string, workdir string, mounts []mount.Mount, mask bool, ReadonlyRootfs bool, networkdisabled bool, timeout int) (ok bool, id string) {
+func RunImage(name string, user string, hostname string, image string, workdir string, mounts []mount.Mount, mask bool, ReadonlyRootfs bool, networkdisabled bool, timeout int, networkhosted bool) (ok bool, id string) {
 
 	var masked []string
 	if mask {
 		masked = []string{"/etc", "/sys", "/proc/tty", "/proc/sys", "/proc/sysrq-trigger", "/proc/cmdline", "/proc/config.gz", "/proc/mounts", "/proc/fs", "/proc/device-tree", "/proc/bus"}
+	}
+
+	network := ""
+	if networkhosted {
+		network = "host"
 	}
 
 	resp, err := docker_cli.ContainerCreate(context.Background(), &container.Config{
@@ -36,6 +41,7 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 		Mounts:         mounts,
 		ReadonlyRootfs: ReadonlyRootfs,
 		AutoRemove:     true,
+		NetworkMode:    container.NetworkMode(network),
 	}, nil, nil, name)
 
 	if err != nil {
