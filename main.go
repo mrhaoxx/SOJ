@@ -94,18 +94,18 @@ func main() {
 				uf.Println("Welcome to", aurora.Bold("SOJ"), aurora.Gray(aurora.GrayIndex(10), "Secure Online Judge"), ",", aurora.BrightBlue(s.User()))
 				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 				uf.Println("Use 'submit", aurora.Gray(15, "(sub)"), "<problem_id>' to submit a problem")
-				uf.Println("Use 'history", aurora.Gray(15, "(hi)"), "[page]' to list your submissions")
+				uf.Println("Use 'list", aurora.Gray(15, "(ls)"), "[page]' to list your submissions")
 				uf.Println("Use 'status", aurora.Gray(15, "(st)"), "<submit_id>' to show a submission")
 				uf.Println("Use 'rank", aurora.Gray(15, "(rk)"), "' to show ranklist")
 				uf.Println("Use 'my' to show your submission summary")
-				uf.Println("Use 'ls' to list problems")
+				uf.Println("Use 'problems' to list problems")
 				uf.Println()
 
 			} else {
 				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 
 				switch cmds[0] {
-				case "ls":
+				case "problems":
 					uf.Println("Problems:", aurora.Italic(aurora.Gray(15, "(click to show in browser)")))
 					for k := range problems {
 						url := cfg.ProblemURLPrefix + k
@@ -161,7 +161,7 @@ func main() {
 						colc[i] = aurora.WhiteFg | aurora.UnderlineFm
 					}
 
-					MkTable(uf, append([]string{"Rank", "User", "Total"}, prblmss...), append([]aurora.Color{aurora.YellowFg, aurora.WhiteFg, aurora.BrightFg | aurora.GreenFg}, colc...), append([][]string{ranks, userss, totalscores}, bestscores...))
+					MkTable(uf, append([]string{"Rank", "User", "Total"}, prblmss...), append([]aurora.Color{aurora.BoldFm | aurora.YellowFg, aurora.BoldFm | aurora.WhiteFg, aurora.BoldFm | aurora.GreenFg}, colc...), append([][]string{ranks, userss, totalscores}, bestscores...))
 
 				case "submit", "sub":
 					if len(cmds) != 2 {
@@ -218,10 +218,10 @@ func main() {
 
 					UserUpdate(s.User(), ctx)
 
-				case "history", "hi":
+				case "list", "ls":
 					if len(cmds) > 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
-						uf.Println("usage: history [page]")
+						uf.Println("usage: list [page]")
 						return
 					}
 
