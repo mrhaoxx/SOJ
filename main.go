@@ -33,9 +33,13 @@ type Config struct {
 
 	DockerCli        string `yaml:"DockerCli"`
 	ProblemURLPrefix string `yaml:"ProblemURLPrefix"`
+
+	Admins []string `yaml:"Admins"`
 }
 
 var cfg = Config{}
+
+var paused = false
 
 func main() {
 
@@ -87,11 +91,14 @@ func main() {
 			log.Info().Str("user", s.User()).Strs("cmds", cmds).Msg("new session")
 
 			if len(cmds) == 0 {
-				uf.Println("Welcome to", aurora.Bold("SOJ"), aurora.Gray(aurora.GrayIndex(10), "Secure Online Judge"))
+				uf.Println("Welcome to", aurora.Bold("SOJ"), aurora.Gray(aurora.GrayIndex(10), "Secure Online Judge"), ",", aurora.BrightBlue(s.User()))
 				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 				uf.Println("Use 'submit", aurora.Gray(15, "(sub)"), "<problem_id>' to submit a problem")
 				uf.Println("Use 'history", aurora.Gray(15, "(hi)"), "[page]' to list your submissions")
 				uf.Println("Use 'status", aurora.Gray(15, "(st)"), "<submit_id>' to show a submission")
+				uf.Println("Use 'rank", aurora.Gray(15, "(rk)"), "' to show ranklist")
+				uf.Println("Use 'my' to show your submission summary")
+				uf.Println("Use 'ls' to list problems")
 				uf.Println()
 
 			} else {
@@ -160,6 +167,10 @@ func main() {
 					if len(cmds) != 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
 						uf.Println("usage: submit <problem_id>")
+						return
+					}
+					if paused {
+						uf.Println(aurora.Red("error:"), "submit is paused. Please try again later")
 						return
 					}
 
@@ -264,34 +275,21 @@ func main() {
 				case "my":
 					uf.Println("User", aurora.Bold(aurora.BrightWhite(s.User())))
 
-					var map_score = make(map[string]SubmitCtx)
+					var user User
 
-					var submits []SubmitCtx
+					db.Where("ID = ?", s.User()).Find(&user)
 
-					db.Where("user = ?", s.User()).Find(&submits)
-
-					for _, submit := range submits {
-						if submit.Status == "completed" {
-							sc, ok := map_score[submit.Problem]
-							if !ok {
-								map_score[submit.Problem] = submit
-							} else {
-								if submit.JudgeResult.Score > sc.JudgeResult.Score {
-									map_score[submit.Problem] = submit
-								}
-							}
-						}
+					if user.ID == "" {
+						uf.Println(aurora.Gray(15, "No submissions yet"))
+						return
 					}
 
+					var prblmss []string
 					for k := range problems {
-						if _, ok := map_score[k]; !ok {
-							map_score[k] = SubmitCtx{
-								Problem: k,
-							}
-						}
+						prblmss = append(prblmss, k)
 					}
 
-					var total_score float64
+					sort.Strings(prblmss)
 
 					Cols := []string{"Problem", "Score", "Weight", "Submit ID", "Date"}
 					var ColLongest = make([]int, len(Cols))
@@ -299,14 +297,18 @@ func main() {
 						ColLongest[i] = len(col)
 					}
 
-					for k, submit := range map_score {
-						ColLongest[0] = max(ColLongest[0], len(k))
-						ColLongest[1] = max(ColLongest[1], len(fmt.Sprintf("%.2f", submit.JudgeResult.Score)))
-						ColLongest[2] = max(ColLongest[2], len(fmt.Sprintf("%.2f", problems[k].Weight)))
-						ColLongest[3] = max(ColLongest[3], len(submit.ID))
-						ColLongest[4] = max(ColLongest[4], len(time.Unix(0, submit.SubmitTime).Format(time.DateTime+" MST")))
+					var map_succ map[string]bool = make(map[string]bool)
 
-						total_score += submit.JudgeResult.Score * problems[k].Weight
+					for _, problem_id := range prblmss {
+						sco, ok := user.BestScores[problem_id]
+						if ok {
+							map_succ[problem_id] = true
+						}
+						ColLongest[0] = max(ColLongest[0], len(problem_id))
+						ColLongest[1] = max(ColLongest[1], len(fmt.Sprintf("%.2f", sco/problems[problem_id].Weight)))
+						ColLongest[2] = max(ColLongest[2], len(fmt.Sprintf("%.2f", problems[problem_id].Weight)))
+						ColLongest[3] = max(ColLongest[3], len(user.BestSubmits[problem_id]))
+						ColLongest[4] = max(ColLongest[4], len(time.Unix(0, user.BestSubmitDate[problem_id]).Format(time.DateTime+" MST")))
 					}
 
 					for i, col := range Cols {
@@ -314,16 +316,16 @@ func main() {
 					}
 
 					uf.Println()
-					for _, submit := range map_score {
+					for _, problem_id := range prblmss {
 						uf.Printf("%-*s %-*.2f %-*.2f %-*s %-*s\n",
-							ColLongest[0], aurora.Bold(aurora.Italic(submit.Problem)),
-							ColLongest[1], aurora.Bold(ColorizeScore(submit.JudgeResult)),
-							ColLongest[2], aurora.Bold(problems[submit.Problem].Weight),
-							ColLongest[3], aurora.Magenta(submit.ID),
+							ColLongest[0], aurora.Bold(aurora.Italic(problem_id)),
+							ColLongest[1], aurora.Bold(ColorizeScore(JudgeResult{Success: map_succ[problem_id], Score: user.BestScores[problem_id] / problems[problem_id].Weight})),
+							ColLongest[2], aurora.Bold(problems[problem_id].Weight),
+							ColLongest[3], aurora.Magenta(user.BestSubmits[problem_id]),
 							ColLongest[4],
 							func() aurora.Value {
-								if submit.Status == "completed" {
-									return aurora.Yellow(time.Unix(0, submit.SubmitTime).Format(time.DateTime + " MST"))
+								if map_succ[problem_id] {
+									return aurora.Yellow(time.Unix(0, user.BestSubmitDate[problem_id]).Format(time.DateTime + " MST"))
 								} else {
 									return aurora.Gray(15, "N/A")
 								}
@@ -331,9 +333,14 @@ func main() {
 					}
 
 					uf.Println()
-					uf.Println("Total Score:", aurora.Bold(aurora.BrightWhite(total_score)))
+					uf.Println("Total Score:", aurora.Bold(aurora.BrightWhite(user.TotalScore)))
 
 				case "adm":
+					if !IsAdmin(s.User()) {
+						s.Write([]byte("unknown command " + strconv.Quote(s.RawCommand()) + "\n"))
+						return
+					}
+
 					if len(cmds) < 2 {
 						uf.Println(aurora.Red("error:"), "invalid arguments")
 						uf.Println("usage: adm <command>")
@@ -383,6 +390,9 @@ func main() {
 						uf.Println()
 
 						ShowSub(uf, submit, problems)
+					case "pause":
+						paused = true
+						uf.Println(aurora.Green("Submit"), aurora.Bold("paused"))
 					}
 
 				default:
@@ -432,7 +442,7 @@ func ListSubs(uf Userface, submits []SubmitCtx) {
 		uf.Println(aurora.Gray(15, "No submissions yet"))
 	} else {
 		// t.AddHeader("ID", "Problem", "Status", "Message", "Score", "Judge Message")
-		Cols := []string{"ID", "Problem", "Status", "Message", "Score", "Judge Message", "User", "Date"}
+		Cols := []string{"ID", "User", "Problem", "Status", "Message", "Score", "Judge Message", "Date"}
 		var ColLongest = make([]int, len(Cols))
 		for i, col := range Cols {
 			ColLongest[i] = len(col)
@@ -440,12 +450,12 @@ func ListSubs(uf Userface, submits []SubmitCtx) {
 
 		for _, submit := range submits {
 			ColLongest[0] = max(ColLongest[0], len(submit.ID))
-			ColLongest[1] = max(ColLongest[1], len(submit.Problem))
-			ColLongest[2] = max(ColLongest[2], len(submit.Status))
-			ColLongest[3] = max(ColLongest[3], len(submit.Msg))
-			ColLongest[4] = max(ColLongest[4], len(fmt.Sprintf("%.2f", submit.JudgeResult.Score)))
-			ColLongest[5] = max(ColLongest[5], len(submit.JudgeResult.Msg))
-			ColLongest[6] = max(ColLongest[6], len(submit.User))
+			ColLongest[1] = max(ColLongest[1], len(submit.User))
+			ColLongest[2] = max(ColLongest[2], len(submit.Problem))
+			ColLongest[3] = max(ColLongest[3], len(submit.Status))
+			ColLongest[4] = max(ColLongest[4], len(submit.Msg))
+			ColLongest[5] = max(ColLongest[5], len(fmt.Sprintf("%.2f", submit.JudgeResult.Score)))
+			ColLongest[6] = max(ColLongest[6], len(OmitStr(submit.JudgeResult.Msg, 20)))
 			ColLongest[7] = max(ColLongest[7], len(time.Unix(0, submit.SubmitTime).Format(time.DateTime)))
 		}
 
@@ -455,14 +465,14 @@ func ListSubs(uf Userface, submits []SubmitCtx) {
 		uf.Println()
 		for _, submit := range submits {
 			// uf.Println(aurora.Magenta(submit.ID), submit.Problem, ColorizeStatus(submit.Status), aurora.Blue(submit.Msg), aurora.Bold(submit.JudgeResult.Score))
-			uf.Printf("%-*s %-*s %-*s %-*s %-*.2f %-*s %-*s %-*s\n",
+			uf.Printf("%-*s %-*s %-*s %-*s %-*s %-*.2f %-*s %-*s\n",
 				ColLongest[0], aurora.Magenta(submit.ID),
-				ColLongest[1], aurora.Bold(aurora.Italic(submit.Problem)),
-				ColLongest[2], ColorizeStatus(submit.Status),
-				ColLongest[3], aurora.Blue(submit.Msg),
-				ColLongest[4], aurora.Bold(ColorizeScore(submit.JudgeResult)),
-				ColLongest[5], aurora.Bold(aurora.Blue(submit.JudgeResult.Msg)),
-				ColLongest[6], aurora.Bold(aurora.BrightWhite(submit.User)),
+				ColLongest[1], aurora.Bold(aurora.BrightWhite(submit.User)),
+				ColLongest[2], aurora.Bold(aurora.Italic(submit.Problem)),
+				ColLongest[3], ColorizeStatus(submit.Status),
+				ColLongest[4], aurora.Blue(submit.Msg),
+				ColLongest[5], aurora.Bold(ColorizeScore(submit.JudgeResult)),
+				ColLongest[6], aurora.Bold(aurora.Blue(OmitStr(submit.JudgeResult.Msg, 20))),
 				ColLongest[7], aurora.Yellow(time.Unix(0, submit.SubmitTime).Format(time.DateTime+" MST")))
 		}
 	}
@@ -532,4 +542,20 @@ func MkTable(uf Userface, cols []string, colc []aurora.Color, data [][]string) {
 		uf.Println()
 	}
 
+}
+
+func IsAdmin(user string) bool {
+	for _, a := range cfg.Admins {
+		if a == user {
+			return true
+		}
+	}
+	return false
+}
+
+func OmitStr(s string, n int) string {
+	if len(s) > n {
+		return s[:n] + "..."
+	}
+	return s
 }
