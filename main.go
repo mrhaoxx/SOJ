@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"time"
 
@@ -66,10 +67,13 @@ func main() {
 	}
 
 	db.AutoMigrate(&SubmitCtx{})
+	db.AutoMigrate(&User{})
 
 	db.Model(&SubmitCtx{}).Where("status != ? AND status != ? AND status != ?", "completed", "dead", "failed").Update("status", "dead")
 
 	problems := LoadProblemDir(cfg.ProblemsDir)
+
+	DoFULLUserScan(problems)
 
 	s := &ssh.Server{
 		Addr: cfg.ListenAddr,
@@ -100,6 +104,57 @@ func main() {
 						url := cfg.ProblemURLPrefix + k
 						uf.Println("	", aurora.Bold(k), aurora.Hyperlink(url, url))
 					}
+				case "rank", "rk":
+					usrs := make([]User, 0)
+
+					var prblmss []string
+					for k := range problems {
+						prblmss = append(prblmss, k)
+					}
+
+					sort.Strings(prblmss)
+
+					db.Order("total_score desc").Find(&usrs)
+
+					var ranks []string
+
+					var cursoc float64 = -1
+					var currk int = 0
+					for i := range usrs {
+						if usrs[i].TotalScore != cursoc {
+							currk = i
+							cursoc = usrs[i].TotalScore
+						}
+						ranks = append(ranks, strconv.Itoa(currk+1))
+
+					}
+
+					var userss []string
+					for _, u := range usrs {
+						userss = append(userss, u.ID)
+					}
+
+					var totalscores []string
+					for _, u := range usrs {
+						totalscores = append(totalscores, fmt.Sprintf("%.2f", u.TotalScore))
+					}
+
+					var bestscores [][]string
+
+					for _, p := range prblmss {
+						var scores []string
+						for _, u := range usrs {
+							scores = append(scores, fmt.Sprintf("%.2f", u.BestScores[p]))
+						}
+						bestscores = append(bestscores, scores)
+					}
+
+					var colc = make([]aurora.Color, len(prblmss))
+					for i := range colc {
+						colc[i] = aurora.WhiteFg | aurora.UnderlineFm
+					}
+
+					MkTable(uf, append([]string{"Rank", "User", "Total"}, prblmss...), append([]aurora.Color{aurora.YellowFg, aurora.WhiteFg, aurora.BrightFg | aurora.GreenFg}, colc...), append([][]string{ranks, userss, totalscores}, bestscores...))
 
 				case "submit", "sub":
 					if len(cmds) != 2 {
@@ -149,6 +204,8 @@ func main() {
 					uf.Println("Message:\n	", aurora.Blue(ctx.Msg))
 
 					WriteResult(uf, ctx)
+
+					UserUpdate(s.User(), ctx)
 
 				case "history", "hi":
 					if len(cmds) > 2 {
@@ -443,4 +500,36 @@ func ShowSub(uf Userface, submit SubmitCtx, problems map[string]Problem) {
 
 	// c, _ := json.Marshal(submit)
 	// fmt.Println(string(c))
+}
+
+func MkTable(uf Userface, cols []string, colc []aurora.Color, data [][]string) {
+	var ColLongest = make([]int, len(cols))
+	for i, col := range cols {
+		ColLongest[i] = len(col)
+	}
+
+	for i := 0; i < len(data[0]); i++ {
+		for j := 0; j < len(cols); j++ {
+			ColLongest[j] = max(ColLongest[j], len(data[j][i]))
+		}
+	}
+
+	for i, col := range cols {
+		uf.Printf("%-*s ", ColLongest[i], col)
+	}
+	uf.Println()
+
+	// for _, row := range data {
+	// 	for i, col := range row {
+	// 		uf.Printf("%-*s ", ColLongest[i], col)
+	// 	}
+	// 	uf.Println()
+	// }
+	for i := 0; i < len(data[0]); i++ {
+		for j := 0; j < len(cols); j++ {
+			uf.Printf("%-*s ", ColLongest[j], aurora.Colorize(data[j][i], colc[j]))
+		}
+		uf.Println()
+	}
+
 }
