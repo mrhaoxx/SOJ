@@ -95,7 +95,7 @@ func main() {
 				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 				uf.Println("Use 'submit", aurora.Gray(15, "(sub)"), "<problem_id>' to submit a problem")
 				uf.Println("Use 'list", aurora.Gray(15, "(ls)"), "[page]' to list your submissions")
-				uf.Println("Use 'status", aurora.Gray(15, "(st)"), "<submit_id>' to show a submission")
+				uf.Println("Use 'status", aurora.Gray(15, "(st)"), "<submit_id>' to show a submission", aurora.Magenta("(fuzzy match)"))
 				uf.Println("Use 'rank", aurora.Gray(15, "(rk)"), "' to show ranklist")
 				uf.Println("Use 'my' to show your submission summary")
 				uf.Println("Use 'problems' to list problems")
@@ -262,7 +262,7 @@ func main() {
 					uf.Println(aurora.Green("Showing"), aurora.Bold("submission"), aurora.Magenta(cmds[1]))
 
 					var submit SubmitCtx
-					tx := db.Where("id = ? AND user = ?", cmds[1], s.User()).First(&submit)
+					tx := db.Order("submit_time desc").Where("id LIKE ? AND user = ?", "%"+cmds[1]+"%", s.User()).First(&submit)
 					if tx.Error != nil {
 						uf.Println(aurora.Red("error:"), "submit", aurora.Yellow(strconv.Quote(cmds[1])), "not found")
 						return
@@ -480,6 +480,7 @@ func ListSubs(uf Userface, submits []SubmitCtx) {
 
 func ShowSub(uf Userface, submit SubmitCtx, problems map[string]Problem) {
 	uf.Println("Submit", "Status:", ColorizeStatus(submit.Status))
+	uf.Println("Submit ID:", aurora.Magenta(submit.ID))
 	uf.Println("Submit Time:", aurora.Yellow(time.Unix(0, submit.SubmitTime).Format(time.DateTime+" MST")))
 	uf.Println("Last Update:", aurora.Yellow(time.Unix(0, submit.LastUpdate).Format(time.DateTime+" MST")))
 	uf.Println("User", aurora.Bold(aurora.BrightWhite(submit.User)))
