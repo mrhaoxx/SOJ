@@ -187,6 +187,18 @@ func RunJudge(ctx *SubmitCtx) {
 	if err != nil {
 		goto workdir_creation_failed
 	}
+	err = os.Chown(ctx.Workdir, cfg.SubmitUid, cfg.SubmitGid)
+	if err != nil {
+		goto workdir_creation_failed
+	}
+	err = os.Chown(submits_dir, cfg.SubmitUid, cfg.SubmitGid)
+	if err != nil {
+		goto workdir_creation_failed
+	}
+	err = os.Chown(workflow_dir, cfg.SubmitUid, cfg.SubmitGid)
+	if err != nil {
+		goto workdir_creation_failed
+	}
 
 	goto workdir_created
 
@@ -215,6 +227,9 @@ workdir_created:
 			ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Red("failed"))
 			return
 		} else {
+			os.Chown(dst_submit_path, cfg.SubmitUid, cfg.SubmitGid)
+			os.Chmod(dst_submit_path, 0400)
+
 			log.Debug().Timestamp().Str("id", ctx.ID).Str("submit_file", submit.Path).Str("hash", hash).Msg("copied submit file")
 			// ctx.SubmitsHashes[submit.Path] = hash
 
@@ -258,6 +273,8 @@ workdir_created:
 			// "SOJ_USER=" + ctx.User,
 			"SOJ_PROBLEM=" + ctx.Problem,
 			"SOJ_SUBMIT=" + ctx.ID,
+			"SOJ_WORK_UID=" + strconv.Itoa(cfg.SubmitUid),
+			"SOJ_WORK_GID=" + strconv.Itoa(cfg.SubmitGid),
 		}
 
 		for _, mnt := range workflow.Mounts {
