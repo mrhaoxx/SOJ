@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -24,13 +25,15 @@ func SftpHandler(sess ssh.Session) {
 		return
 	}
 
-	success, id := RunImage(name, "999", "soj-sftpd", "docker.io/mrhaoxx/soj-subsystem-sftp", "/", []mount.Mount{
+	os.Chown(path, cfg.SubmitUid, cfg.SubmitGid)
+
+	success, id := RunImage(name, strconv.Itoa(cfg.SubmitUid), "soj-sftpd", "docker.io/mrhaoxx/soj-subsystem-sftp", "/", []mount.Mount{
 		{
 			Type:   mount.TypeBind,
 			Source: path,
 			Target: "/work",
 		},
-	}, true, true, false, 120, false)
+	}, true, true, false, 120, false, nil)
 
 	if !success {
 		log.Println(name, "failed to run sftp container")

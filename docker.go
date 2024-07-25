@@ -17,7 +17,7 @@ import (
 
 var docker_cli *client.Client
 
-func RunImage(name string, user string, hostname string, image string, workdir string, mounts []mount.Mount, mask bool, ReadonlyRootfs bool, networkdisabled bool, timeout int, networkhosted bool) (ok bool, id string) {
+func RunImage(name string, user string, hostname string, image string, workdir string, mounts []mount.Mount, mask bool, ReadonlyRootfs bool, networkdisabled bool, timeout int, networkhosted bool, env []string) (ok bool, id string) {
 
 	var masked []string
 	if mask {
@@ -35,6 +35,7 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 		Hostname:        hostname,
 		WorkingDir:      workdir,
 		NetworkDisabled: networkdisabled,
+		Env:             env,
 		StopTimeout:     &timeout,
 	}, &container.HostConfig{
 		MaskedPaths:    masked,
@@ -87,7 +88,7 @@ func GetContainerIP(id string) string {
 	return info.NetworkSettings.IPAddress
 }
 
-func ExecContainer(id string, cmd string, timeout int, stdout, stderr io.Writer) (int, string, error) {
+func ExecContainer(id string, cmd string, timeout int, stdout, stderr io.Writer, env []string) (int, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
@@ -95,6 +96,7 @@ func ExecContainer(id string, cmd string, timeout int, stdout, stderr io.Writer)
 		AttachStdout: true,
 		AttachStderr: true,
 		Cmd:          []string{"sh", "-c", cmd},
+		Env:          env,
 	})
 
 	if err != nil {

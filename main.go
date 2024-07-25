@@ -29,10 +29,16 @@ type Config struct {
 	SubmitWorkDir string `yaml:"SubmitWorkDir"`
 	ProblemsDir   string `yaml:"ProblemsDir"`
 
+	RealSubmitsDir    string `yaml:"RealSubmitsDir"`
+	RealSubmitWorkDir string `yaml:"RealSubmitWorkDir"`
+
 	SqlitePath string `yaml:"SqlitePath"`
 
 	DockerCli        string `yaml:"DockerCli"`
 	ProblemURLPrefix string `yaml:"ProblemURLPrefix"`
+
+	SubmitGid int `yaml:"SubmitGid"`
+	SubmitUid int `yaml:"SubmitUid"`
 
 	Admins []string `yaml:"Admins"`
 }
@@ -198,6 +204,8 @@ func main() {
 
 						SubmitDir: path.Join(cfg.SubmitsDir, s.User(), pid),
 						Workdir:   path.Join(cfg.SubmitWorkDir, id),
+
+						RealWorkdir: path.Join(cfg.RealSubmitWorkDir, id),
 
 						Userface: Userface{
 							Buffer: bytes.NewBuffer(nil),

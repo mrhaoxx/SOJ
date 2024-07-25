@@ -89,6 +89,8 @@ type SubmitCtx struct {
 	WorkflowResults WorkflowResults
 	JudgeResult     JudgeResult
 
+	RealWorkdir string
+
 	running  chan struct{}
 	Userface Userface
 }
@@ -170,6 +172,9 @@ func RunJudge(ctx *SubmitCtx) {
 	var submits_dir = path.Join(ctx.Workdir, "submits")
 	var workflow_dir = path.Join(ctx.Workdir, "work")
 
+	var rsubmits_dir = path.Join(ctx.RealWorkdir, "submits")
+	var rworkflow_dir = path.Join(ctx.RealWorkdir, "work")
+
 	err = os.Mkdir(ctx.Workdir, 0700)
 	if err != nil {
 		goto workdir_creation_failed
@@ -245,6 +250,16 @@ workdir_created:
 			},
 		}
 
+		var envs = []string{
+			"SOJ_SUBMITS_DIR=/submits",
+			"SOJ_WORK_DIR=/work",
+			"SOJ_REAL_WORKDIR=" + rworkflow_dir,
+			"SOJ_REAL_SUBMITDIR=" + rsubmits_dir,
+			// "SOJ_USER=" + ctx.User,
+			"SOJ_PROBLEM=" + ctx.Problem,
+			"SOJ_SUBMIT=" + ctx.ID,
+		}
+
 		for _, mnt := range workflow.Mounts {
 			_mount = append(_mount, mount.Mount{
 				Type:     mount.Type(mnt.Type),
@@ -263,12 +278,13 @@ workdir_created:
 			stepshows[step] = struct{}{}
 		}
 
-		var usr = "1000"
+		var usr = strconv.Itoa(cfg.SubmitUid)
+
 		if workflow.Root {
 			usr = "0"
 		}
 
-		ok, cid := RunImage("soj-judge-"+ctx.ID+"-"+strconv.Itoa(idx+1), usr, "soj-judgement", workflow.Image, "/work", _mount, false, false, workflow.DisableNetwork, workflow.Timeout, workflow.NetworkHostMode)
+		ok, cid := RunImage("soj-judge-"+ctx.ID+"-"+strconv.Itoa(idx+1), usr, "soj-judgement", workflow.Image, "/work", _mount, false, false, workflow.DisableNetwork, workflow.Timeout, workflow.NetworkHostMode, envs)
 
 		if !ok {
 			ctx.SetStatus("failed").SetMsg("failed to run judge container").Update()
@@ -293,7 +309,7 @@ workdir_created:
 				re = ColoredIO{ctx.Userface, aurora.RedFg}
 
 			}
-			ec, logs, err := ExecContainer(cid, step, workflow.Timeout, rr, re)
+			ec, logs, err := ExecContainer(cid, step, workflow.Timeout, rr, re, envs)
 
 			if ok {
 				ctx.Userface.Println(aurora.Gray(15, "exit code:"), aurora.Yellow(ec))
