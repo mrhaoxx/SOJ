@@ -438,7 +438,7 @@ func WriteResult(uf Userface, res SubmitCtx) {
 	uf.Println("Judgement Message:")
 
 	if len(res.JudgeResult.Msg) > 0 {
-		uf.Println("	", aurora.Bold(aurora.Cyan(strings.ReplaceAll(res.JudgeResult.Msg, "\n", "\n	"))))
+		uf.Println(aurora.Bold(aurora.Cyan("	" + strings.ReplaceAll(res.JudgeResult.Msg, "\n", "\n	"))))
 	} else {
 		uf.Println("	", aurora.Gray(15, "No message"))
 	}
