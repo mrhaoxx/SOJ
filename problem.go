@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 
@@ -59,7 +60,7 @@ func LoadProblem(file string) Problem {
 	err = yaml.Unmarshal(_f, &_p)
 
 	if err != nil {
-		panic(err)
+		panic(errors.Wrap(err, "failed to unmarshal problem "+file))
 	}
 
 	if _p.Weight == 0 {
