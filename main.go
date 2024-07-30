@@ -372,12 +372,12 @@ func main() {
 						// reverse order
 
 						// db.Where("user = ?", s.User()).Offset((page - 1) * 10).Limit(10).Find(&submits)
-						db.Order("submit_time desc").Offset((page - 1) * 10).Limit(20).Find(&submits)
+						db.Order("submit_time desc").Offset((page - 1) * 20).Limit(20).Find(&submits)
 
 						var total int64
-						db.Model(&SubmitCtx{}).Where("user = ?", s.User()).Count(&total)
+						db.Model(&SubmitCtx{}).Count(&total)
 
-						uf.Println(aurora.Cyan("Page"), aurora.Bold(page), "of", aurora.Yellow(total/10+1))
+						uf.Println(aurora.Cyan("Page"), aurora.Bold(page), "of", aurora.Yellow(total/20+1))
 
 						ListSubs(uf, submits)
 					case "status":
