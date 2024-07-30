@@ -220,6 +220,9 @@ workdir_created:
 		var src_submit_path = path.Join(ctx.SubmitDir, submit.Path)
 		var dst_submit_path = path.Join(submits_dir, submit.Path)
 
+		os.MkdirAll(path.Dir(dst_submit_path), 0700)
+		os.Chown(path.Dir(dst_submit_path), cfg.SubmitUid, cfg.SubmitGid)
+
 		var hash string
 		hash, err = CopyFile(src_submit_path, dst_submit_path)
 		if err != nil {
