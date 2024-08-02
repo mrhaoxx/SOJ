@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/mrhaoxx/SOJ/database"
 	"io"
 	"os"
 	"path"
@@ -19,28 +20,28 @@ import (
 )
 
 type JudgeResult struct {
-	Success bool
+	Success bool `json:"success"`
 
-	Score float64
+	Score float64 `json:"score"`
 
-	Msg string
+	Msg string `json:"msg"`
 
-	Memory uint64 // in bytes
-	Time   uint64 // in ns
+	Memory uint64 `json:"memory"` // in bytes
+	Time   uint64 `json:"time"`   // in ns
 
 }
 
 type WorkflowResult struct {
-	Success  bool
-	Logs     string
-	ExitCode int
+	Success  bool   `json:"success"`
+	Logs     string `json:"logs"`
+	ExitCode int    `json:"exit_code"`
 
-	Steps []WorkflowStepResult
+	Steps []WorkflowStepResult `json:"steps"`
 }
 
 type WorkflowStepResult struct {
-	Logs     string
-	ExitCode int
+	Logs     string `json:"logs"`
+	ExitCode int    `json:"exit_code"`
 }
 
 type Userface struct {
@@ -71,32 +72,33 @@ type SubmitHash struct {
 	Hash string
 }
 type SubmitCtx struct {
-	ID      string `gorm:"primaryKey"`
-	User    string
-	Problem string
+	ID      string `gorm:"primaryKey" json:"id"`
+	User    string `json:"user"`
+	Problem string `json:"problem"`
 
-	problem *Problem
+	problem *Problem `json:"-"`
 
-	SubmitTime int64
-	LastUpdate int64
+	SubmitTime int64 `json:"submit_time"`
+	LastUpdate int64 `json:"last_update"`
 
-	Status string
-	Msg    string
+	Status string `json:"status"`
+	Msg    string `json:"msg"`
 
-	SubmitDir       string
-	SubmitsHashes   SubmitsHashes
-	Workdir         string
-	WorkflowResults WorkflowResults
-	JudgeResult     JudgeResult
+	SubmitDir       string          `json:"-"`
+	SubmitsHashes   SubmitsHashes   `json:"-"`
+	Workdir         string          `json:"-"`
+	WorkflowResults WorkflowResults `json:"workflow_results"`
+	JudgeResult     JudgeResult     `json:"judge_result"`
 
-	RealWorkdir string
+	RealWorkdir string `json:"-"`
 
-	running  chan struct{}
-	Userface Userface
+	running  chan struct{} `json:"-"`
+	Userface Userface      `json:"-"`
 }
 
 func (ctx *SubmitCtx) Update() {
 	ctx.LastUpdate = time.Now().UnixNano()
+	db := database.GetDB()
 	db.Save(ctx)
 }
 

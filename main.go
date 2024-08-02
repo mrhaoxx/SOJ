@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrhaoxx/SOJ/database"
+
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/rs/zerolog/log"
 
@@ -18,13 +20,12 @@ import (
 	"github.com/rs/zerolog"
 	gossh "golang.org/x/crypto/ssh"
 	"gopkg.in/yaml.v3"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 type Config struct {
 	HostKey    string `yaml:"HostKey"`
 	ListenAddr string `yaml:"ListenAddr"`
+	APIAddr    string `yaml:"APIAddr"`
 
 	SubmitsDir    string `yaml:"SubmitsDir"`
 	SubmitWorkDir string `yaml:"SubmitWorkDir"`
@@ -72,11 +73,7 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to parse host key")
 	}
 
-	db, err = gorm.Open(sqlite.Open(cfg.SqlitePath), &gorm.Config{})
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to open sqlite")
-	}
-
+	db := database.InitDB(cfg.SqlitePath)
 	db.AutoMigrate(&SubmitCtx{})
 	db.AutoMigrate(&User{})
 
@@ -85,6 +82,8 @@ func main() {
 	problems := LoadProblemDir(cfg.ProblemsDir)
 
 	DoFULLUserScan(problems)
+
+	serveHTTP(cfg.APIAddr)
 
 	s := &ssh.Server{
 		Addr: cfg.ListenAddr,

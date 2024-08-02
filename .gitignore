@@ -1,4 +1,6 @@
 .vscode/
+.idea/
+work_dir/
 problems
 submits
 workflows
