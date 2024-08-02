@@ -401,6 +401,9 @@ func main() {
 					case "pause":
 						paused = true
 						uf.Println(aurora.Green("Submit"), aurora.Bold("paused"))
+					case "reload":
+						problems = LoadProblemDir(cfg.ProblemsDir)
+						uf.Println(aurora.Green("Problems"), aurora.Bold("reloaded"))
 					}
 
 				default:
