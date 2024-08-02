@@ -218,34 +218,19 @@ workdir_created:
 	ctx.SetStatus("prep_files").Update()
 
 	for _, submit := range ctx.problem.Submits {
-
-		var src_submit_path = path.Join(ctx.SubmitDir, submit.Path)
-		var dst_submit_path = path.Join(submits_dir, submit.Path)
-
-		os.MkdirAll(path.Dir(dst_submit_path), 0700)
-		os.Chown(path.Dir(dst_submit_path), cfg.SubmitUid, cfg.SubmitGid)
-
-		var hash string
-		hash, err = CopyFile(src_submit_path, dst_submit_path)
-		if err != nil {
-			ctx.SetStatus("failed").SetMsg("failed to copy submit file " + strconv.Quote(submit.Path)).Update()
-			ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Red("failed"))
-			return
+		if !submit.IsDir {
+			SubmitFile(ctx, submits_dir, submit.Path)
 		} else {
-			os.Chown(dst_submit_path, cfg.SubmitUid, cfg.SubmitGid)
-			os.Chmod(dst_submit_path, 0400)
-
-			log.Debug().Timestamp().Str("id", ctx.ID).Str("submit_file", submit.Path).Str("hash", hash).Msg("copied submit file")
-			// ctx.SubmitsHashes[submit.Path] = hash
-
-			ctx.SubmitsHashes = append(ctx.SubmitsHashes, SubmitHash{
-				Hash: hash,
-				Path: submit.Path,
-			})
-
-			ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Blue(hash))
+			files, err := os.ReadDir(ctx.SubmitDir + "/" + submit.Path)
+			if err != nil {
+				ctx.SetStatus("failed").SetMsg("failed to read submit dir " + strconv.Quote(submit.Path)).Update()
+				ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Red("failed"))
+				return
+			}
+			for _, file := range files {
+				SubmitFile(ctx, submits_dir, submit.Path+"/"+file.Name())
+			}
 		}
-
 	}
 
 	log.Debug().Timestamp().Str("id", ctx.ID).Msg("copied submit files")
@@ -417,6 +402,35 @@ func CopyFile(src, dst string) (string, error) {
 	// Calculate the MD5 sum of the file that has been copied.
 	md5String := hex.EncodeToString(hash.Sum(nil))
 	return md5String, nil
+}
+
+// SubmitFile adds a file to the problem's submition list.
+func SubmitFile(ctx *SubmitCtx, submits_dir string, submit_path string) {
+	var src_submit_path = path.Join(ctx.SubmitDir, submit_path)
+	var dst_submit_path = path.Join(submits_dir, submit_path)
+
+	os.MkdirAll(path.Dir(dst_submit_path), 0700)
+	os.Chown(path.Dir(dst_submit_path), cfg.SubmitUid, cfg.SubmitGid)
+
+	hash, err := CopyFile(src_submit_path, dst_submit_path)
+	if err != nil {
+		ctx.SetStatus("failed").SetMsg("failed to copy submit file " + strconv.Quote(submit_path)).Update()
+		ctx.Userface.Println("	*", aurora.Yellow(submit_path), ":", aurora.Red("failed"))
+		return
+	} else {
+		os.Chown(dst_submit_path, cfg.SubmitUid, cfg.SubmitGid)
+		os.Chmod(dst_submit_path, 0400)
+
+		log.Debug().Timestamp().Str("id", ctx.ID).Str("submit_file", submit_path).Str("hash", hash).Msg("copied submit file")
+		// ctx.SubmitsHashes[submit.Path] = hash
+
+		ctx.SubmitsHashes = append(ctx.SubmitsHashes, SubmitHash{
+			Hash: hash,
+			Path: submit_path,
+		})
+
+		ctx.Userface.Println("	*", aurora.Yellow(submit_path), ":", aurora.Blue(hash))
+	}
 }
 
 type ColoredIO struct {
