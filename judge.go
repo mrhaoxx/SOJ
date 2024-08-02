@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/mrhaoxx/SOJ/database"
+	"github.com/pkg/errors"
 	"io"
+	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -219,16 +222,34 @@ workdir_created:
 
 	for _, submit := range ctx.problem.Submits {
 		if !submit.IsDir {
-			SubmitFile(ctx, submits_dir, submit.Path)
-		} else {
-			files, err := os.ReadDir(ctx.SubmitDir + "/" + submit.Path)
+			err = SubmitFile(ctx, submits_dir, submit.Path)
 			if err != nil {
-				ctx.SetStatus("failed").SetMsg("failed to read submit dir " + strconv.Quote(submit.Path)).Update()
+				ctx.SetStatus("failed").SetMsg("failed to copy submit file " + strconv.Quote(submit.Path)).Update()
 				ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Red("failed"))
 				return
 			}
-			for _, file := range files {
-				SubmitFile(ctx, submits_dir, submit.Path+"/"+file.Name())
+		} else {
+			// ctx.SubmitDir: eg: /path/to/soj/submits/user
+			// submit.Path:   eg: src
+			dir_path := ctx.SubmitDir + "/" + submit.Path
+			err = filepath.WalkDir(dir_path, func(path string, info fs.DirEntry, err error) error {
+				if err != nil {
+					return errors.Wrap(err, "failed to execute filepath.WalkDir")
+				}
+				if !info.IsDir() {
+					if filepath.IsAbs(path) { // If path returns relative path
+						path, _ = filepath.Rel(dir_path, path)
+					}
+					// path: eg: subfolder/main.cpp
+					// final file path: src/subfolder/main.cpp
+					return SubmitFile(ctx, submits_dir, submit.Path+"/"+path) // Concatenate with submit.Path
+				}
+				return nil
+			})
+			if err != nil {
+				ctx.SetStatus("failed").SetMsg("failed to copy submit directory " + strconv.Quote(submit.Path)).Update()
+				ctx.Userface.Println("	*", aurora.Yellow(submit.Path), ":", aurora.Red("failed"))
+				return
 			}
 		}
 	}
@@ -405,7 +426,7 @@ func CopyFile(src, dst string) (string, error) {
 }
 
 // SubmitFile adds a file to the problem's submition list.
-func SubmitFile(ctx *SubmitCtx, submits_dir string, submit_path string) {
+func SubmitFile(ctx *SubmitCtx, submits_dir string, submit_path string) error {
 	var src_submit_path = path.Join(ctx.SubmitDir, submit_path)
 	var dst_submit_path = path.Join(submits_dir, submit_path)
 
@@ -414,9 +435,7 @@ func SubmitFile(ctx *SubmitCtx, submits_dir string, submit_path string) {
 
 	hash, err := CopyFile(src_submit_path, dst_submit_path)
 	if err != nil {
-		ctx.SetStatus("failed").SetMsg("failed to copy submit file " + strconv.Quote(submit_path)).Update()
-		ctx.Userface.Println("	*", aurora.Yellow(submit_path), ":", aurora.Red("failed"))
-		return
+		return err
 	} else {
 		os.Chown(dst_submit_path, cfg.SubmitUid, cfg.SubmitGid)
 		os.Chmod(dst_submit_path, 0400)
@@ -431,6 +450,8 @@ func SubmitFile(ctx *SubmitCtx, submits_dir string, submit_path string) {
 
 		ctx.Userface.Println("	*", aurora.Yellow(submit_path), ":", aurora.Blue(hash))
 	}
+
+	return nil
 }
 
 type ColoredIO struct {
