@@ -29,7 +29,7 @@ func listSubmitsHandler(c *gin.Context) {
 	db := database.GetDB()
 	var submits []SubmitCtx
 	var total int64
-	db.Select("id", "user", "problem", "submit_time", "last_update", "status", "msg", "workflow_results", "judge_result").
+	db.Select("id", "user", "problem", "submit_time", "last_update", "status", "msg", "judge_result").
 		Order("submit_time desc").
 		Offset((page - 1) * limit).Limit(limit).
 		Find(&submits)
@@ -60,6 +60,7 @@ func listRankHandler(c *gin.Context) {
 }
 
 func serveHTTP(addr string) {
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 	err := router.SetTrustedProxies([]string{"127.0.0.1"})
 	if err != nil {
