@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/mrhaoxx/SOJ/database"
 	"github.com/rs/zerolog/log"
@@ -82,7 +81,7 @@ func UserUpdate(user string, s SubmitCtx) {
 		u.BestScores = make(map[string]float64)
 		u.BestSubmits = make(map[string]string)
 		u.BestSubmitDate = make(map[string]int64)
-		fmt.Println("Creating new user", user)
+		log.Info().Str("user", user).Msg("Creating new user")
 	}
 
 	if s.Status == "completed" {
