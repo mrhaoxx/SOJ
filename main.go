@@ -586,6 +586,7 @@ func IsAdmin(user string) bool {
 }
 
 func OmitStr(s string, n int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
 	if len(s) > n {
 		return s[:n] + "..."
 	}
