@@ -128,12 +128,12 @@ func main() {
 				uf.Println(aurora.Yellow(time.Now().Format(time.DateTime + " MST")))
 
 				switch cmds[0] {
-				case "problems":
-					uf.Println("Problems:", aurora.Italic(aurora.Gray(15, "(click to show in browser)")))
-					for k := range problems {
-						url := cfg.ProblemURLPrefix + k
-						uf.Println("	", aurora.Bold(k), aurora.Hyperlink(url, url))
-					}
+				// case "problems":
+				// 	uf.Println("Problems:", aurora.Italic(aurora.Gray(15, "(click to show in browser)")))
+				// 	for k := range problems {
+				// 		url := cfg.ProblemURLPrefix + k
+				// 		uf.Println("	", aurora.Bold(k), aurora.Hyperlink(url, url))
+				// 	}
 				case "rank", "rk":
 					usrs := make([]User, 0)
 
