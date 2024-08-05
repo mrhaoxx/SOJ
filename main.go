@@ -2,19 +2,18 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"github.com/logrusorgru/aurora/v4"
+	"github.com/rs/zerolog/log"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"os"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-
-	"github.com/logrusorgru/aurora/v4"
-	"github.com/rs/zerolog/log"
 
 	"github.com/docker/docker/client"
 	ssh "github.com/gliderlabs/ssh"
@@ -119,9 +118,10 @@ func main() {
 				uf.Println("Use 'submit", aurora.Gray(15, "(sub)"), "<problem_id>' to submit a problem")
 				uf.Println("Use 'list", aurora.Gray(15, "(ls)"), "[page]' to list your submissions")
 				uf.Println("Use 'status", aurora.Gray(15, "(st)"), "<submit_id>' to show a submission", aurora.Magenta("(fuzzy match)"))
-				uf.Println("Use 'rank", aurora.Gray(15, "(rk)"), "' to show ranklist")
+				uf.Println("Use 'rank", aurora.Gray(15, "(rk)"), "' to show rank list")
 				uf.Println("Use 'my' to show your submission summary")
 				// uf.Println("Use 'problems' to list problems")
+				uf.Println("Use 'token' to get token for frontend authentication")
 				uf.Println()
 
 			} else {
@@ -359,6 +359,24 @@ func main() {
 
 					uf.Println()
 					uf.Println("Total Score:", aurora.Bold(aurora.BrightWhite(user.TotalScore)))
+
+				case "token":
+					user := User{
+						ID: s.User(),
+					}
+
+					result := db.First(&user)
+					if result.Error != nil {
+						if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+							uf.Println(aurora.Red("Error:"), "failed to get token, please submit at least one problem first")
+						} else {
+							uf.Println(aurora.Red("Error:"), result.Error)
+						}
+						return
+					}
+
+					uf.Println("Your token is:", aurora.Bold(user.Token), "please keep it secret")
+					return
 
 				case "adm":
 					if !IsAdmin(s.User()) {
