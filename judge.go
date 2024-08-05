@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/mrhaoxx/SOJ/database"
-	"github.com/pkg/errors"
 	"io"
 	"io/fs"
 	"os"
@@ -15,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/rs/zerolog/log"
@@ -101,7 +101,6 @@ type SubmitCtx struct {
 
 func (ctx *SubmitCtx) Update() {
 	ctx.LastUpdate = time.Now().UnixNano()
-	db := database.GetDB()
 	db.Save(ctx)
 }
 

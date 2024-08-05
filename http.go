@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/mrhaoxx/SOJ/database"
-	"github.com/rs/zerolog/log"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 )
 
 // listSubmitsHandler
@@ -26,7 +26,6 @@ func listSubmitsHandler(c *gin.Context) {
 		return
 	}
 
-	db := database.GetDB()
 	var submits []SubmitCtx
 	var total int64
 	db.Select("id", "user", "problem", "submit_time", "last_update", "status", "msg", "judge_result").
@@ -48,7 +47,6 @@ func listSubmitsHandler(c *gin.Context) {
 // listRankHandler
 // list rank of users
 func listRankHandler(c *gin.Context) {
-	db := database.GetDB()
 	var users []User
 	db.Order("total_score desc").Find(&users)
 

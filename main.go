@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrhaoxx/SOJ/database"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/rs/zerolog/log"
@@ -73,7 +74,11 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to parse host key")
 	}
 
-	db := database.InitDB(cfg.SqlitePath)
+	db, err = gorm.Open(sqlite.Open(cfg.SqlitePath), &gorm.Config{})
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to open sqlite")
+	}
+
 	db.AutoMigrate(&SubmitCtx{})
 	db.AutoMigrate(&User{})
 

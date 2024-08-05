@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"github.com/mrhaoxx/SOJ/database"
 )
 
 type User struct {
@@ -31,7 +30,6 @@ func (u *User) CalculateTotalScore() {
 func DoFULLUserScan(pmbls map[string]Problem) {
 
 	var _submits []SubmitCtx
-	db := database.GetDB()
 	db.Find(&_submits)
 
 	users := make(map[string]User)
@@ -67,7 +65,6 @@ func DoFULLUserScan(pmbls map[string]Problem) {
 
 func UserUpdate(user string, s SubmitCtx) {
 	var u User
-	db := database.GetDB()
 	db.First(&u, "id = ?", user)
 
 	if u.ID == "" {

@@ -1,4 +1,4 @@
-FROM golang:bookworm AS build
+FROM docker.io/library/golang:bookworm AS build
 
 COPY . /go/src/github.com/mrhaoxx/SOJ
 

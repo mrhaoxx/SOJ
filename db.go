@@ -5,7 +5,11 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+
+	"gorm.io/gorm"
 )
+
+var db *gorm.DB
 
 type SubmitRecord struct {
 	ID      string `gorm:"primaryKey"`

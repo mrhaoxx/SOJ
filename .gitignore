@@ -13,3 +13,4 @@ SOJ
 soj.db
 
 subsystems/slurm
+.DS_Store
