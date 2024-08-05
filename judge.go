@@ -23,28 +23,28 @@ import (
 )
 
 type JudgeResult struct {
-	Success bool `json:"success"`
+	Success bool
 
-	Score float64 `json:"score"`
+	Score float64
 
-	Msg string `json:"msg"`
+	Msg string
 
-	Memory uint64 `json:"memory"` // in bytes
-	Time   uint64 `json:"time"`   // in ns
+	Memory uint64 // in bytes
+	Time   uint64 // in ns
 
 }
 
 type WorkflowResult struct {
-	Success  bool   `json:"success"`
-	Logs     string `json:"logs"`
-	ExitCode int    `json:"exit_code"`
+	Success  bool
+	Logs     string
+	ExitCode int
 
-	Steps []WorkflowStepResult `json:"steps"`
+	Steps []WorkflowStepResult
 }
 
 type WorkflowStepResult struct {
-	Logs     string `json:"logs"`
-	ExitCode int    `json:"exit_code"`
+	Logs     string
+	ExitCode int
 }
 
 type Userface struct {
@@ -75,28 +75,28 @@ type SubmitHash struct {
 	Hash string
 }
 type SubmitCtx struct {
-	ID      string `gorm:"primaryKey" json:"id"`
-	User    string `json:"user"`
-	Problem string `json:"problem"`
+	ID      string `gorm:"primaryKey"`
+	User    string
+	Problem string
 
-	problem *Problem `json:"-"`
+	problem *Problem
 
-	SubmitTime int64 `json:"submit_time"`
-	LastUpdate int64 `json:"last_update"`
+	SubmitTime int64
+	LastUpdate int64
 
-	Status string `json:"status"`
-	Msg    string `json:"msg"`
+	Status string
+	Msg    string
 
-	SubmitDir       string          `json:"-"`
-	SubmitsHashes   SubmitsHashes   `json:"-"`
-	Workdir         string          `json:"-"`
-	WorkflowResults WorkflowResults `json:"workflow_results"`
-	JudgeResult     JudgeResult     `json:"judge_result"`
+	SubmitDir       string
+	SubmitsHashes   SubmitsHashes
+	Workdir         string
+	WorkflowResults WorkflowResults
+	JudgeResult     JudgeResult
 
-	RealWorkdir string `json:"-"`
+	RealWorkdir string
 
-	running  chan struct{} `json:"-"`
-	Userface Userface      `json:"-"`
+	running  chan struct{}
+	Userface Userface
 }
 
 func (ctx *SubmitCtx) Update() {
