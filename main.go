@@ -28,6 +28,8 @@ type Config struct {
 	ListenAddr string `yaml:"ListenAddr"`
 	APIAddr    string `yaml:"APIAddr"`
 
+	AllowedSSHPubkey string `yaml:"AllowedSSHPubkey"`
+
 	SubmitsDir    string `yaml:"SubmitsDir"`
 	SubmitWorkDir string `yaml:"SubmitWorkDir"`
 	ProblemsDir   string `yaml:"ProblemsDir"`
@@ -62,6 +64,16 @@ func main() {
 	err = yaml.Unmarshal(_cfg, &cfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse config file")
+	}
+
+	var pubkey gossh.PublicKey
+	if cfg.AllowedSSHPubkey != "" {
+		pubkey, _, _, _, err = gossh.ParseAuthorizedKey([]byte(cfg.AllowedSSHPubkey))
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to parse allowed ssh pubkey")
+		}
+	} else {
+		log.Warn().Msg("no allowed ssh pubkey specified, allowing all")
 	}
 
 	docker_cli, err = client.NewClientWithOpts(client.FromEnv)
@@ -419,6 +431,9 @@ func main() {
 		},
 		SubsystemHandlers: map[string]ssh.SubsystemHandler{
 			"sftp": SftpHandler,
+		},
+		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
+			return pubkey == nil || ssh.KeysEqual(pubkey, key)
 		},
 	}
 	s.AddHostKey(pk)
