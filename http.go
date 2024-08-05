@@ -138,7 +138,6 @@ func getSubmitDetail(c *gin.Context) {
 func listRank(c *gin.Context) {
 	var users []User
 	db.Order("total_score desc").
-		Omit("token").
 		Find(&users)
 
 	c.JSON(200, gin.H{
@@ -153,7 +152,6 @@ func getUserSummary(c *gin.Context) {
 	id, _ := c.Get("user")
 	var user User
 	db.Where("id = ?", id.(string)).
-		Omit("token").
 		First(&user)
 
 	c.JSON(200, gin.H{

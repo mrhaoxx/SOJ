@@ -9,7 +9,7 @@ import (
 
 type User struct {
 	ID    string `gorm:"primaryKey"`
-	Token string `gorm:"uniqueIndex"`
+	Token string `gorm:"uniqueIndex" json:"-"`
 
 	BestScores     JMapStrFloat64
 	BestSubmits    JMapStrString
