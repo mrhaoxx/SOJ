@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/rs/zerolog/log"
@@ -361,21 +360,8 @@ func main() {
 					uf.Println("Total Score:", aurora.Bold(aurora.BrightWhite(user.TotalScore)))
 
 				case "token":
-					user := User{
-						ID: s.User(),
-					}
-
-					result := db.First(&user)
-					if result.Error != nil {
-						if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-							uf.Println(aurora.Red("Error:"), "failed to get token, please submit at least one problem first")
-						} else {
-							uf.Println(aurora.Red("Error:"), result.Error)
-						}
-						return
-					}
-
-					uf.Println("Your token is:", aurora.Bold(user.Token), "please keep it secret")
+					token := GetToken(s.User())
+					uf.Println("Your token is:", aurora.Bold(token), "please keep it secret")
 					return
 
 				case "adm":

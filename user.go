@@ -74,8 +74,7 @@ func UserUpdate(user string, s SubmitCtx) {
 
 	if u.ID == "" { // Create a new user in database
 		u.ID = user
-		token, _ := uuid.NewUUID()
-		u.Token = token.String()
+		u.Token = uuid.New().String()
 		u.BestScores = make(map[string]float64)
 		u.BestSubmits = make(map[string]string)
 		u.BestSubmitDate = make(map[string]int64)
@@ -93,6 +92,23 @@ func UserUpdate(user string, s SubmitCtx) {
 	u.CalculateTotalScore()
 
 	db.Save(&u)
+}
+
+func GetToken(user string) string {
+	var u User
+	db.First(&u, "id = ?", user)
+
+	if u.ID == "" { // Create a new user in database
+		u.ID = user
+		u.Token = uuid.New().String()
+		u.BestScores = make(map[string]float64)
+		u.BestSubmits = make(map[string]string)
+		u.BestSubmitDate = make(map[string]int64)
+		log.Info().Str("user", user).Msg("Creating new user")
+		db.Save(&u)
+	}
+
+	return u.Token
 }
 
 func (sh JMapStrFloat64) Value() (driver.Value, error) {
