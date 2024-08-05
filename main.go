@@ -121,7 +121,7 @@ func main() {
 				uf.Println("Use 'status", aurora.Gray(15, "(st)"), "<submit_id>' to show a submission", aurora.Magenta("(fuzzy match)"))
 				uf.Println("Use 'rank", aurora.Gray(15, "(rk)"), "' to show ranklist")
 				uf.Println("Use 'my' to show your submission summary")
-				uf.Println("Use 'problems' to list problems")
+				// uf.Println("Use 'problems' to list problems")
 				uf.Println()
 
 			} else {
