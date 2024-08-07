@@ -92,7 +92,7 @@ func GetContainerIP(id string) string {
 	return info.NetworkSettings.IPAddress
 }
 
-func ExecContainer(id string, cmd string, timeout int, stdout, stderr io.Writer, env []string) (int, string, error) {
+func ExecContainer(id string, cmd string, timeout int, stdout, stderr io.Writer, env []string, privileged bool) (int, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
@@ -101,6 +101,7 @@ func ExecContainer(id string, cmd string, timeout int, stdout, stderr io.Writer,
 		AttachStderr: true,
 		Cmd:          []string{"sh", "-c", cmd},
 		Env:          env,
+		Privileged:   privileged,
 	})
 
 	if err != nil {

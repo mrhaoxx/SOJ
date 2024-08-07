@@ -16,6 +16,7 @@ type Workflow struct {
 	Root            bool    `yaml:"root"`
 	DisableNetwork  bool    `yaml:"disablenetwork"`
 	Show            []int   `yaml:"show"`
+	PrivilegedSteps []int   `yaml:"privilegedsteps"`
 	NetworkHostMode bool    `yaml:"networkhostmode"`
 	Mounts          []Mount `yaml:"mounts"`
 }

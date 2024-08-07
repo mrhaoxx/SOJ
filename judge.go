@@ -300,9 +300,13 @@ workdir_created:
 		ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "/", len(ctx.problem.Workflow))
 
 		stepshows := map[int]struct{}{}
+		stepprivillege := map[int]struct{}{}
 
 		for _, step := range workflow.Show {
 			stepshows[step] = struct{}{}
+		}
+		for _, step := range workflow.PrivilegedSteps {
+			stepprivillege[step] = struct{}{}
 		}
 
 		var usr = strconv.Itoa(cfg.SubmitUid)
@@ -328,6 +332,8 @@ workdir_created:
 			ctx.Userface.Println(GetTime(start_time), "running", "workflow", strconv.Itoa(idx+1), "step", strconv.Itoa(sidx+1), "/", len(workflow.Steps))
 
 			_, ok := stepshows[sidx+1]
+			_, priv := stepprivillege[sidx+1]
+
 			var rr io.Writer = nil
 			var re io.Writer = nil
 			if ok {
@@ -336,7 +342,7 @@ workdir_created:
 				re = ColoredIO{ctx.Userface, aurora.RedFg}
 
 			}
-			ec, logs, err := ExecContainer(cid, step, workflow.Timeout, rr, re, envs)
+			ec, logs, err := ExecContainer(cid, step, workflow.Timeout, rr, re, envs, priv)
 
 			if ok {
 				ctx.Userface.Println(aurora.Gray(15, "exit code:"), aurora.Yellow(ec))
