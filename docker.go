@@ -43,6 +43,10 @@ func RunImage(name string, user string, hostname string, image string, workdir s
 		ReadonlyRootfs: ReadonlyRootfs,
 		AutoRemove:     true,
 		NetworkMode:    container.NetworkMode(network),
+
+		Resources: container.Resources{Ulimits: []*container.Ulimit{
+			{Name: "memlock", Soft: -1, Hard: -1},
+		}},
 	}, nil, nil, name)
 
 	if err != nil {
