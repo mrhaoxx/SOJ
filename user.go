@@ -3,10 +3,13 @@ package main
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 type User struct {
-	ID string `gorm:"primaryKey"`
+	ID    string `gorm:"primaryKey"`
+	Token string `gorm:"uniqueIndex" json:"-"`
 
 	BestScores     JMapStrFloat64
 	BestSubmits    JMapStrString
@@ -32,17 +35,19 @@ func DoFULLUserScan(pmbls map[string]Problem) {
 	var _submits []SubmitCtx
 	db.Find(&_submits)
 
+	var _users []User
+	db.Find(&_users)
+
 	users := make(map[string]User)
+	for _, user := range _users { // Load users into map
+		users[user.ID] = user
+	}
 
 	for _, s := range _submits {
 		u, ok := users[s.User]
 		if !ok {
-			u = User{
-				ID:             s.User,
-				BestScores:     make(map[string]float64),
-				BestSubmits:    make(map[string]string),
-				BestSubmitDate: make(map[string]int64),
-			}
+			// User does not exist in map, nor in database, but exists in submits
+			log.Fatal().Msg("Encountered corrupted data, submitted user does not exist in User table")
 		}
 
 		if s.Status == "completed" {
@@ -67,12 +72,15 @@ func UserUpdate(user string, s SubmitCtx) {
 	var u User
 	db.First(&u, "id = ?", user)
 
-	if u.ID == "" {
+	if u.ID == "" { // Create a new user in database
 		u.ID = user
+		u.Token = uuid.New().String()
 		u.BestScores = make(map[string]float64)
 		u.BestSubmits = make(map[string]string)
 		u.BestSubmitDate = make(map[string]int64)
+		log.Info().Str("user", user).Msg("Creating new user")
 	}
+
 	if s.Status == "completed" {
 		if u.BestScores[s.Problem] < s.JudgeResult.Score*s.problem.Weight {
 			u.BestScores[s.Problem] = s.JudgeResult.Score * s.problem.Weight
@@ -84,6 +92,23 @@ func UserUpdate(user string, s SubmitCtx) {
 	u.CalculateTotalScore()
 
 	db.Save(&u)
+}
+
+func GetToken(user string) string {
+	var u User
+	db.First(&u, "id = ?", user)
+
+	if u.ID == "" { // Create a new user in database
+		u.ID = user
+		u.Token = uuid.New().String()
+		u.BestScores = make(map[string]float64)
+		u.BestSubmits = make(map[string]string)
+		u.BestSubmitDate = make(map[string]int64)
+		log.Info().Str("user", user).Msg("Creating new user")
+		db.Save(&u)
+	}
+
+	return u.Token
 }
 
 func (sh JMapStrFloat64) Value() (driver.Value, error) {
